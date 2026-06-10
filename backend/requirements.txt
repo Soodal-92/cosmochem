@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic
+rdkit
+# Phase B
+pandas
+statsmodels
+scipy
+# Phase C (필요 시)
+# celery
+# redis
+# scikit-learn

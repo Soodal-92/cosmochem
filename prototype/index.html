@@ -1,0 +1,726 @@
+<!-- CosmoChem Console — 화장품 원료 구조 분석 모듈 (프로토타입) -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CosmoChem · 구조 분석 콘솔</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --base:#EEF1F4;
+  --panel:#FFFFFF;
+  --panel-2:#F7F9FB;
+  --ink:#141823;
+  --muted:#5C6675;
+  --faint:#8B96A6;
+  --line:#E1E7EE;
+  --line-2:#EDF1F5;
+  --accent:#4334D6;       /* indicator violet */
+  --accent-soft:#ECEAFB;
+  --good:#11876A;
+  --good-soft:#E2F2ED;
+  --warn:#B5790C;
+  --warn-soft:#FBF1DC;
+  --flag:#C23A33;
+  --flag-soft:#FBE7E5;
+  --radius:14px;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --disp:'Space Grotesk',system-ui,sans-serif;
+  --body:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--base);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 80px}
+
+/* header */
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}
+.brand{display:flex;align-items:baseline;gap:12px}
+.logo{
+  font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-.02em;
+  display:flex;align-items:center;gap:9px;
+}
+.logo .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 4px var(--accent-soft);display:inline-block}
+.tag{font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.14em}
+.stage-note{
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;
+  padding:6px 13px;letter-spacing:.02em;
+}
+.stage-note b{color:var(--accent)}
+
+/* layout grid */
+.grid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+@media(max-width:880px){.grid{grid-template-columns:1fr}}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.card-h{padding:13px 16px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:9px}
+.card-h .ix{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600}
+.card-h h2{font-family:var(--disp);font-size:14px;font-weight:600;margin:0;letter-spacing:-.01em}
+.card-b{padding:16px}
+
+/* input */
+label.lbl{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:0 0 7px}
+.smiles-row{display:flex;gap:8px}
+input#smiles{
+  flex:1;font-family:var(--mono);font-size:13px;color:var(--ink);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:9px;
+  padding:11px 12px;outline:none;width:100%;
+}
+input#smiles:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+button.run{
+  font-family:var(--disp);font-weight:600;font-size:13px;color:#fff;background:var(--accent);
+  border:none;border-radius:9px;padding:0 16px;cursor:pointer;white-space:nowrap;
+  transition:filter .15s;
+}
+button.run:hover{filter:brightness(1.08)}
+.err{color:var(--flag);font-size:12px;margin-top:8px;min-height:0;font-family:var(--mono)}
+
+.sub{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:18px 0 9px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font-size:12px;border:1px solid var(--line);background:var(--panel-2);
+  border-radius:999px;padding:5px 11px;cursor:pointer;color:var(--muted);
+  transition:all .12s;font-weight:500;
+}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.catwrap{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cat{
+  font-size:12.5px;border:1px solid var(--line);background:var(--panel-2);
+  border-radius:9px;padding:9px;cursor:pointer;text-align:left;color:var(--muted);
+  transition:all .12s;font-weight:500;display:flex;flex-direction:column;gap:2px;
+}
+.cat:hover{border-color:var(--accent)}
+.cat.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.cat small{font-size:10.5px;color:var(--faint);font-weight:400}
+.cat.on small{color:var(--accent)}
+
+/* structure canvas */
+.struct-wrap{position:relative;background:
+  linear-gradient(var(--line-2) 1px,transparent 1px) 0 0/22px 22px,
+  linear-gradient(90deg,var(--line-2) 1px,transparent 1px) 0 0/22px 22px,var(--panel-2);
+  border-radius:11px;min-height:240px;display:flex;align-items:center;justify-content:center;padding:10px}
+#struct{max-width:100%}
+.struct-note{position:absolute;bottom:8px;left:10px;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.name-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.cmpd-name{font-family:var(--disp);font-size:19px;font-weight:600;letter-spacing:-.01em}
+.formula{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.formula sub{font-size:.78em}
+
+/* readout panel */
+.readout{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-2);border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:4px}
+@media(max-width:620px){.readout{grid-template-columns:repeat(2,1fr)}}
+.ro{background:var(--panel);padding:11px 12px}
+.ro .k{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.ro .v{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:3px}
+.ro .u{font-size:11px;color:var(--faint);font-weight:400}
+
+/* gauges */
+.gauges{margin-top:16px;display:flex;flex-direction:column;gap:13px}
+.gauge .gh{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.gauge .gname{font-size:12.5px;font-weight:600}
+.gauge .gname span{font-weight:400;color:var(--faint);font-size:11px;font-family:var(--mono);margin-left:6px}
+.gauge .gval{font-family:var(--mono);font-size:13px;font-weight:600}
+.lit{font-family:var(--mono);font-size:10.5px;color:var(--faint);font-weight:400;margin-left:7px}
+.track{position:relative;height:9px;border-radius:6px;background:var(--line-2);overflow:hidden}
+.zone{position:absolute;top:0;bottom:0}
+.zone.good{background:var(--good-soft)}
+.zone.warn{background:var(--warn-soft)}
+.zone.flag{background:var(--flag-soft)}
+.marker{position:absolute;top:-3px;width:3px;height:15px;border-radius:2px;background:var(--ink);transform:translateX(-50%);z-index:2}
+.scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-top:3px}
+
+.badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px}
+.badge.good{background:var(--good-soft);color:var(--good)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.flag{background:var(--flag-soft);color:var(--flag)}
+.badge.est{background:var(--panel-2);color:var(--faint);border:1px solid var(--line)}
+
+/* interpretation */
+.interp{display:flex;flex-direction:column;gap:11px}
+.iblock{background:var(--panel-2);border:1px solid var(--line-2);border-radius:10px;padding:12px 13px}
+.iblock .ih{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.iblock .ih .t{font-weight:600;font-size:13px}
+.iblock p{margin:0;font-size:12.5px;color:var(--muted)}
+.outlook{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-radius:11px;border:1px solid var(--line)}
+.outlook .ol{font-size:12.5px;color:var(--muted);max-width:62%}
+.outlook .ov{font-family:var(--disp);font-size:17px;font-weight:600}
+
+/* checklist */
+.ckhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.ckhead .cat-name{font-family:var(--disp);font-weight:600;font-size:14px}
+.step{border-left:2px solid var(--line);padding:0 0 16px 16px;position:relative;margin-left:4px}
+.step:last-child{padding-bottom:0}
+.step::before{content:'';position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--panel)}
+.step .st{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.step .sh{font-weight:600;font-size:13px;margin:3px 0 6px}
+.step ul{margin:0;padding-left:17px}
+.step li{font-size:12.5px;color:var(--muted);margin-bottom:4px}
+.step li b{color:var(--ink);font-weight:600}
+
+.disclaimer{margin-top:16px;font-size:11.5px;color:var(--faint);line-height:1.55;padding:12px 14px;background:var(--panel-2);border:1px dashed var(--line);border-radius:10px}
+.placeholder{color:var(--faint);text-align:center;padding:30px 10px;font-size:13px}
+.stack{display:flex;flex-direction:column;gap:18px}
+.spacer{height:18px}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo"><span class="dot"></span>CosmoChem</div>
+      <span class="tag">structure analysis console</span>
+    </div>
+    <div class="stage-note">Module <b>01</b> · 물질 선정 + 구조 분석 · 프로토타입</div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: input -->
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><span class="ix">IN</span><h2>원료 입력</h2></div>
+        <div class="card-b">
+          <label class="lbl" for="smiles">SMILES 구조식</label>
+          <div class="smiles-row">
+            <input id="smiles" placeholder="예: O=C(N)c1cccnc1" spellcheck="false">
+            <button class="run" onclick="analyze()">분석</button>
+          </div>
+          <div class="err" id="err"></div>
+
+          <div class="sub">자주 쓰는 원료</div>
+          <div class="chips" id="presets"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span class="ix">FN</span><h2>기능성 카테고리</h2></div>
+        <div class="card-b">
+          <p style="margin:0 0 11px;font-size:12px;color:var(--muted)">선택하면 합성 단계별 구조 확인·분석 포인트가 갱신됩니다.</p>
+          <div class="catwrap" id="cats"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><span class="ix">2D</span><h2>구조 · 분자 지표</h2></div>
+        <div class="card-b">
+          <div class="name-row">
+            <div class="cmpd-name" id="cname">—</div>
+            <div class="formula" id="formula"></div>
+          </div>
+          <div class="struct-wrap">
+            <canvas id="struct" width="520" height="260"></canvas>
+            <div class="struct-note" id="snote"></div>
+          </div>
+
+          <div class="readout" id="readout" style="margin-top:14px"></div>
+
+          <div class="gauges" id="gauges"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span class="ix">IP</span><h2>화장품 관점 해석</h2></div>
+        <div class="card-b">
+          <div id="interp"><div class="placeholder">원료를 입력하면 피부 투과·제형 적합성 해석이 표시됩니다.</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><span class="ix">QC</span><h2>단계별 구조 확인 포인트</h2></div>
+        <div class="card-b">
+          <div id="checklist"><div class="placeholder">기능성 카테고리를 선택하세요.</div></div>
+        </div>
+      </div>
+
+      <div class="disclaimer" id="disc">
+        <b>정확도 안내 &nbsp;</b> 분자식·정확질량·분자량·HBD/HBA·회전결합·고리수는 SMILES로부터 직접 계산되어 신뢰할 수 있습니다.
+        TPSA는 Ertl 방식의 근사이며, logP는 브라우저용 간이 추정입니다(정밀값은 RDKit 백엔드 연동 시 교체). 프리셋 원료에는 문헌값(lit.)을 함께 표기합니다.
+        효능·임상 수치가 아니며 스크리닝·상대비교 용도입니다.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/smiles-drawer/2.1.7/smiles-drawer.min.js"></script>
+<script>
+/* ============================================================
+   CHEM ENGINE — minimal SMILES parser + descriptor calculator
+   ============================================================ */
+const MASS = { // [monoisotopic, standard atomic weight], H added separately
+  H:[1.0078250319,1.00794], B:[11.0093055,10.811], C:[12,12.011], N:[14.0030740,14.0067],
+  O:[15.9949146,15.9994], F:[18.9984032,18.9984032], P:[30.97376,30.973762], S:[31.972071,32.066],
+  Cl:[34.9688527,35.4527], Br:[78.9183376,79.904], I:[126.904473,126.90447]
+};
+const VAL = {B:[3],C:[4],N:[3,5],O:[2],F:[1],P:[3,5],S:[2,4,6],Cl:[1],Br:[1],I:[1]};
+const ORGANIC = ['B','C','N','O','P','S','F','Cl','Br','I'];
+
+function parseSmiles(smi){
+  const atoms=[], bonds=[];
+  let i=0, prev=null, pendingBond=null, branch=[], ringMap={};
+  const n=smi.length;
+  function addBond(a,b,ord){ bonds.push({a,b,order:ord}); }
+  while(i<n){
+    let c=smi[i];
+    if(c==='('){ branch.push(prev); i++; continue; }
+    if(c===')'){ prev=branch.pop(); i++; continue; }
+    if(c==='-'){pendingBond=1;i++;continue;}
+    if(c==='='){pendingBond=2;i++;continue;}
+    if(c==='#'){pendingBond=3;i++;continue;}
+    if(c===':'){pendingBond=1.5;i++;continue;}
+    if(c==='/'||c==='\\'){pendingBond=1;i++;continue;}
+    if(c==='.'){prev=null;pendingBond=null;i++;continue;}
+    // ring closures
+    if(/[0-9]/.test(c) || c==='%'){
+      let num;
+      if(c==='%'){ num=smi.substr(i+1,2); i+=3; } else { num=c; i++; }
+      if(ringMap[num]!==undefined){
+        const other=ringMap[num];
+        let ord=pendingBond|| ((atoms[prev].arom&&atoms[other].arom)?1.5:1);
+        addBond(prev,other,ord); delete ringMap[num];
+      } else { ringMap[num]={}; ringMap[num]=prev; }
+      pendingBond=null; continue;
+    }
+    // bracket atom
+    if(c==='['){
+      let j=smi.indexOf(']',i); let tok=smi.slice(i+1,j); i=j+1;
+      let m=tok.match(/^(\d*)([A-Z][a-z]?|[bcnops])(.*)$/);
+      let el=m[2], arom=/[a-z]/.test(el[0])&&el.length===1;
+      let elNorm = arom? el.toUpperCase():el;
+      let rest=m[3]||'';
+      let hMatch=rest.match(/H(\d*)/); let hC = hMatch? (hMatch[1]===''?1:+hMatch[1]) : 0;
+      let charge=0;
+      let cMatch=rest.match(/([+\-])(\d*)/);
+      if(cMatch){ charge=(cMatch[1]==='+'?1:-1)*(cMatch[2]===''?1:+cMatch[2]); }
+      const idx=atoms.length;
+      atoms.push({el:elNorm,arom,charge,hExplicit:hC,bracket:true});
+      if(prev!==null){ let ord=pendingBond||((atoms[prev].arom&&arom)?1.5:1); addBond(prev,idx,ord); }
+      prev=idx; pendingBond=null; continue;
+    }
+    // organic subset (two-letter first)
+    let two=smi.substr(i,2);
+    let el=null, arom=false;
+    if(two==='Cl'||two==='Br'){ el=two; i+=2; }
+    else {
+      let one=c;
+      if('BCNOPSFI'.includes(one)){ el=one; i++; }
+      else if('bcnops'.includes(one)){ el=one.toUpperCase(); arom=true; i++; }
+      else { i++; continue; } // ignore unknown char gracefully
+    }
+    const idx=atoms.length;
+    atoms.push({el,arom,charge:0,hExplicit:0,bracket:false});
+    if(prev!==null){ let ord=pendingBond||((atoms[prev].arom&&arom)?1.5:1); addBond(prev,idx,ord); }
+    prev=idx; pendingBond=null;
+  }
+  if(atoms.length===0) throw new Error('구조를 해석하지 못했습니다.');
+  return {atoms,bonds};
+}
+
+function computeHydrogens(mol){
+  const {atoms,bonds}=mol;
+  const sum=atoms.map(()=>0), deg=atoms.map(()=>0);
+  bonds.forEach(b=>{ sum[b.a]+=b.order; sum[b.b]+=b.order; deg[b.a]++; deg[b.b]++; });
+  const NORMAL={B:3,C:4,N:3,O:2,P:3,S:2,F:1,Cl:1,Br:1,I:1};
+  atoms.forEach((a,k)=>{
+    if(a.bracket){ a.hImpl=0; a.h=a.hExplicit; a.bsum=sum[k]; a.deg=deg[k]; return; }
+    let h;
+    if(a.arom){
+      // aromatic ring consumes one unit of valence via the delocalised system:
+      // nH = (normalValence - 1) - (neighbour count). Bond orders ignored for arom.
+      const nv=NORMAL[a.el]||3;
+      h=Math.max(0,(nv-1)-deg[k]);
+    } else {
+      const vals=VAL[a.el]||[0];
+      const bs=Math.round(sum[k]);
+      let target=vals.find(v=>v>=bs); if(target===undefined) target=vals[vals.length-1];
+      h=Math.max(0, target - bs + a.charge);
+    }
+    a.hImpl=h; a.h=h+a.hExplicit; a.bsum=sum[k]; a.deg=deg[k];
+  });
+}
+
+// bridge detection -> bonds NOT in a ring are bridges
+function ringBonds(mol){
+  const {atoms,bonds}=mol;
+  const adj=atoms.map(()=>[]);
+  bonds.forEach((b,bi)=>{ adj[b.a].push({to:b.b,bi}); adj[b.b].push({to:b.a,bi}); });
+  const disc=atoms.map(()=>-1), low=atoms.map(()=>-1), inRing=bonds.map(()=>false);
+  let timer=0;
+  function dfs(u,peBi){
+    disc[u]=low[u]=timer++;
+    for(const e of adj[u]){
+      if(e.bi===peBi) continue;
+      if(disc[e.to]===-1){ dfs(e.to,e.bi); low[u]=Math.min(low[u],low[e.to]);
+        if(low[e.to]>disc[u]){/*bridge*/} else {inRing[e.bi]=true;} }
+      else { low[u]=Math.min(low[u],disc[e.to]); inRing[e.bi]=true; }
+    }
+  }
+  for(let k=0;k<atoms.length;k++) if(disc[k]===-1) dfs(k,-1);
+  return inRing;
+}
+
+function descriptors(mol){
+  computeHydrogens(mol);
+  const {atoms,bonds}=mol;
+  const inRing=ringBonds(mol);
+
+  // formula & mass
+  const counts={}; let H=0, mono=0, mw=0;
+  atoms.forEach(a=>{ counts[a.el]=(counts[a.el]||0)+1; H+=a.h;
+    mono+=MASS[a.el][0]; mw+=MASS[a.el][1]; });
+  mono+=H*MASS.H[0]; mw+=H*MASS.H[1];
+  counts.H=(counts.H||0)+H;
+  // Hill order: C, H, then alphabetical
+  const order=Object.keys(counts).sort((x,y)=> x==='C'?-1:y==='C'?1:x==='H'?-1:y==='H'?1:x<y?-1:1);
+  const formula=order.filter(e=>counts[e]>0).map(e=>({el:e,n:counts[e]}));
+
+  // HBD / HBA (Lipinski)
+  let hbd=0,hba=0;
+  atoms.forEach(a=>{ if(a.el==='N'||a.el==='O'){ hba++; hbd+=a.h; } });
+
+  // rotatable bonds
+  let rot=0;
+  bonds.forEach((b,bi)=>{
+    if(b.order!==1) return;
+    if(inRing[bi]) return;
+    if(atoms[b.a].deg<2||atoms[b.b].deg<2) return;
+    // skip amide C-N
+    const A=atoms[b.a],B=atoms[b.b];
+    const isAmide=( (A.el==='C'&&B.el==='N')||(A.el==='N'&&B.el==='C') );
+    if(isAmide){ const cIdx=A.el==='C'?b.a:b.b;
+      const hasCarbonyl=bonds.some(x=>x.order===2 && (x.a===cIdx||x.b===cIdx) &&
+        (atoms[x.a].el==='O'||atoms[x.b].el==='O'));
+      if(hasCarbonyl) return; }
+    rot++;
+  });
+
+  // ring count (cyclomatic, assume connected components)
+  // components
+  const adj=atoms.map(()=>[]); bonds.forEach(b=>{adj[b.a].push(b.b);adj[b.b].push(b.a);});
+  const seen=atoms.map(()=>false); let comp=0;
+  for(let k=0;k<atoms.length;k++){ if(!seen[k]){comp++; const st=[k];seen[k]=true;
+    while(st.length){const u=st.pop(); adj[u].forEach(v=>{if(!seen[v]){seen[v]=true;st.push(v);}});}}}
+  const rings=bonds.length-atoms.length+comp;
+  const aromRing=atoms.some(a=>a.arom);
+
+  const heavy=atoms.length;
+
+  // TPSA (Ertl approximation) — common N/O fragment contributions
+  let tpsa=0;
+  atoms.forEach((a,k)=>{
+    const nb=bonds.filter(b=>b.a===k||b.b===k);
+    const orders=nb.map(b=>b.order);
+    const hasD=orders.includes(2), hasT=orders.includes(3);
+    const single=orders.filter(o=>o===1).length;
+    const conn=a.deg; const h=a.h;
+    if(a.el==='O'){
+      if(a.arom) tpsa+=13.14;
+      else if(a.charge<0) tpsa+=23.06;
+      else if(hasD) tpsa+=17.07;            // =O
+      else if(h>=1) tpsa+=20.23;            // -OH
+      else tpsa+=9.23;                      // -O-
+    } else if(a.el==='N'){
+      if(hasT) tpsa+=23.79;                 // nitrile/azide-ish
+      else if(a.arom){
+        if(conn===2&&h===0) tpsa+=12.89;
+        else if(conn===3&&h===0) tpsa+=4.41;
+        else if(h>=1) tpsa+=15.79;          // [nH]
+        else tpsa+=12.89;
+      }
+      else if(hasD){ tpsa+= (h>=1?23.85:12.36); } // =N- / =NH
+      else if(conn===3&&h===0) tpsa+=3.24;  // 3° amine
+      else if(conn===2&&h===1) tpsa+=12.03; // 2° amine
+      else if(conn===1&&h===2) tpsa+=26.02; // 1° amine
+      else if(a.charge>0) tpsa+=4.10;
+      else tpsa+=3.24;
+    }
+  });
+
+  // logP — crude additive estimate (clearly flagged). NOT Wildman-Crippen.
+  let logp=0;
+  atoms.forEach(a=>{
+    if(a.el==='C') logp+= a.arom?0.29:0.20;
+    else if(a.el==='N') logp-= a.charge!==0?1.0:0.55;
+    else if(a.el==='O') logp-= (a.h>0?0.55:0.30);
+    else if(a.el==='S') logp+=0.40;
+    else if(['F','Cl','Br','I'].includes(a.el)) logp+= a.el==='F'?0.20:0.60;
+  });
+  logp += H*0.10;            // hydrophobic H contribution
+  logp -= aromRing?0:0;      // (kept simple)
+  logp = logp - 0.4;         // offset
+
+  return {formula,mono,mw,hbd,hba,rot,rings,aromRing,heavy,tpsa:+tpsa.toFixed(2),logp:+logp.toFixed(2)};
+}
+
+/* ============================================================
+   PRESET LIBRARY — curated literature values
+   ============================================================ */
+const PRESETS=[
+  {n:'나이아신아마이드', smi:'O=C(N)c1cccnc1', cat:'미백', lit:{mw:122.12,logp:-0.37,tpsa:55.98,hbd:1,hba:3}},
+  {n:'아스코르브산', smi:'OC[C@@H](O)[C@H]1OC(=O)C(O)=C1O', cat:'항산화', lit:{mw:176.12,logp:-1.85,tpsa:107.22,hbd:4,hba:6}},
+  {n:'레티놀', smi:'CC1=C(/C=C/C(C)=C/C=C/C(C)=C/CO)C(C)(C)CCC1', cat:'항노화', lit:{mw:286.45,logp:5.68,tpsa:20.23,hbd:1,hba:1}},
+  {n:'알파-아르부틴', smi:'OC[C@H]1O[C@@H](Oc2ccc(O)cc2)[C@H](O)[C@@H](O)[C@@H]1O', cat:'미백', lit:{mw:272.25,logp:-1.35,tpsa:119.61,hbd:5,hba:7}},
+  {n:'코지산', smi:'OCC1=CC(=O)C(O)=CO1', cat:'미백', lit:{mw:142.11,logp:-0.64,tpsa:70.67,hbd:2,hba:4}},
+  {n:'레스베라트롤', smi:'Oc1ccc(/C=C/c2cc(O)cc(O)c2)cc1', cat:'항산화', lit:{mw:228.24,logp:3.1,tpsa:60.69,hbd:3,hba:3}},
+  {n:'페룰산', smi:'COc1cc(/C=C/C(=O)O)ccc1O', cat:'항산화', lit:{mw:194.18,logp:1.51,tpsa:66.76,hbd:2,hba:4}},
+  {n:'살리실산', smi:'OC(=O)c1ccccc1O', cat:'각질', lit:{mw:138.12,logp:2.26,tpsa:57.53,hbd:2,hba:3}},
+  {n:'아데노신', smi:'Nc1ncnc2c1ncn2[C@@H]1O[C@H](CO)[C@@H](O)[C@H]1O', cat:'항노화', lit:{mw:267.24,logp:-1.05,tpsa:139.54,hbd:4,hba:8}},
+  {n:'판테놀', smi:'CC(C)(CO)[C@@H](O)C(=O)NCCCO', cat:'보습', lit:{mw:205.25,logp:-1.6,tpsa:90.4,hbd:4,hba:4}},
+];
+
+/* ============================================================
+   FUNCTIONAL CATEGORY ANALYSIS CHECKLISTS
+   ============================================================ */
+const CATS={
+  '미백':{desc:'tyrosinase 억제·멜라닌 경로',
+    steps:[
+      {st:'STAGE 01 · 출발물질',sh:'코어 골격 확인',li:[
+        '<b>페놀/하이드로퀴논 또는 카테콜 모이어티</b> 존재 여부 — tyrosinase 기질 유사성의 핵심',
+        'TLC Rf·UV(254/365nm)로 출발물질 순도 확인',
+        '<b>HBD가 높은 구조</b>라면 보호기(글리코사이드화 등) 전략 필요']},
+      {st:'STAGE 02 · 중간체',sh:'반응 진행·치환 확인',li:[
+        '<sup>1</sup>H-NMR: 방향족 영역(6.5–7.5ppm) 적분비로 치환 위치 확정',
+        '보호기 도입 시 <b>새 피크 출현 / OH 피크 소멸</b> 확인',
+        'HPLC로 미반응 출발물질 잔류율 모니터링']},
+      {st:'STAGE 03 · 최종물질',sh:'활성 모이어티 보존',li:[
+        '<b>유리 페놀성 OH 재생</b> 여부(탈보호 완결) — FeCl<sub>3</sub> 정색반응',
+        'HRMS로 정확질량 일치(±5ppm) 확인',
+        'tyrosinase in-vitro 저해율로 활성 1차 스크리닝(별도 검증)']},
+    ]},
+  '항노화':{desc:'콜라겐·MMP·세포 신호',
+    steps:[
+      {st:'STAGE 01 · 출발물질',sh:'불안정 골격 식별',li:[
+        '<b>폴리엔/공액 이중결합</b>(레티노이드류) — 산소·광 차단 환경 필수',
+        '출발물질 E/Z 이성질체비 확인(NMR coupling constant)',
+        'logP가 높으면 산화 안정성·제형 분산성 사전 점검']},
+      {st:'STAGE 02 · 중간체',sh:'입체화학 추적',li:[
+        '<b>이중결합 기하(트랜스 유지)</b> — UV-Vis λmax 변화 모니터링',
+        'NMR로 신규 입체중심·이성질체화 여부 확인',
+        '광/열 노출 배치는 분해산물 HPLC 패턴 비교']},
+      {st:'STAGE 03 · 최종물질',sh:'활성형 확정',li:[
+        '<b>활성 작용기(예: 알코올/알데하이드/에스터형)</b> 최종 형태 확인',
+        'HRMS + UV로 동일성·순도(%area) 확보',
+        'MMP-1 저해 또는 콜라겐 합성 in-vitro 1차 평가(별도 검증)']},
+    ]},
+  '보습':{desc:'NMF·각질층 수분 결합',
+    steps:[
+      {st:'STAGE 01 · 출발물질',sh:'친수 작용기 정량',li:[
+        '<b>OH·NH·카복실 등 수소결합 그룹 수</b> 확인 — 보습력 직접 연관',
+        '용해도(수상) 측정, 흡습성(hygroscopicity) 예비 평가',
+        '낮은 logP·높은 TPSA 정상 — 피부 잔류성과 trade-off 고려']},
+      {st:'STAGE 02 · 중간체',sh:'작용기 보존',li:[
+        '반응 중 <b>하이드록실/아마이드기 손실 없음</b> 확인(IR 3200–3500cm<sup>-1</sup>)',
+        '에스터화/아마이드화 시 전환율 NMR 적분으로 추적',
+        '잔류 용매·염 제거 상태 확인(건조 감량)']},
+      {st:'STAGE 03 · 최종물질',sh:'순도·흡습 특성',li:[
+        '<b>수분 결합 그룹 총수</b> 최종 확인, 함수율(KF 적정)',
+        'HRMS·HPLC 순도, 잔류 금속/용매 규격 확인',
+        'corneometer 등 보습 효능 평가(별도 검증)']},
+    ]},
+  '항산화':{desc:'라디칼 소거·전자공여',
+    steps:[
+      {st:'STAGE 01 · 출발물질',sh:'전자공여 모이어티',li:[
+        '<b>폴리페놀·카테콜·엔다이올</b> 등 라디칼 소거 핵심 구조 확인',
+        '공기 산화에 민감 — 불활성 분위기·산화방지제 사용',
+        'DPPH 등으로 출발물질 기준 활성 베이스라인 확보']},
+      {st:'STAGE 02 · 중간체',sh:'산화 부산물 감시',li:[
+        '<b>퀴논/산화체 생성 여부</b> — UV-Vis·색 변화·HPLC 신규 피크',
+        'NMR로 페놀성 OH 적분 유지 확인',
+        '반응 온도·시간 최소화로 분해 억제']},
+      {st:'STAGE 03 · 최종물질',sh:'활성 OH 보존',li:[
+        '<b>유리 페놀성 OH 수</b> 최종 확인(아세틸화-NMR 카운팅 가능)',
+        'HRMS·순도, 산화체 함량 규격화',
+        'DPPH/ABTS IC<sub>50</sub>로 항산화력 정량(별도 검증)']},
+    ]},
+  '각질':{desc:'각질 박리·턴오버',
+    steps:[
+      {st:'STAGE 01 · 출발물질',sh:'산성 작용기',li:[
+        '<b>카복실산/하이드록시산</b> 모이어티 및 pKa 확인',
+        '순도·이성질체(α/β-hydroxy) 구분',
+        'logP로 피부 침투 깊이 경향 예측']},
+      {st:'STAGE 02 · 중간체',sh:'작용기 추적',li:[
+        '에스터/염 형태 전환 시 NMR·IR(1700cm<sup>-1</sup>대) 확인',
+        'HPLC로 전환율·부산물 모니터링']},
+      {st:'STAGE 03 · 최종물질',sh:'유리산 확정',li:[
+        '<b>유리 카복실/하이드록실</b> 재생 확인, 적정으로 산가 측정',
+        'HRMS·순도 규격, pH 의존 안정성 확인']},
+    ]},
+};
+
+/* ============================================================
+   UI / RENDER
+   ============================================================ */
+let activeCat=null, lastLit=null;
+
+function buildPresets(){
+  const el=document.getElementById('presets'); el.innerHTML='';
+  PRESETS.forEach(p=>{
+    const b=document.createElement('button'); b.className='chip'; b.textContent=p.n;
+    b.onclick=()=>{ document.getElementById('smiles').value=p.smi; lastLit={lit:p.lit,name:p.n};
+      [...el.children].forEach(c=>c.classList.remove('on')); b.classList.add('on');
+      if(CATS[p.cat]) selectCat(p.cat); analyze(p.n); };
+    el.appendChild(b);
+  });
+}
+function buildCats(){
+  const el=document.getElementById('cats'); el.innerHTML='';
+  Object.keys(CATS).forEach(k=>{
+    const b=document.createElement('button'); b.className='cat';
+    b.innerHTML=`<span>${k}</span><small>${CATS[k].desc}</small>`;
+    b.onclick=()=>selectCat(k);
+    b.dataset.k=k; el.appendChild(b);
+  });
+}
+function selectCat(k){
+  activeCat=k;
+  [...document.getElementById('cats').children].forEach(c=>c.classList.toggle('on',c.dataset.k===k));
+  renderChecklist();
+}
+function renderChecklist(){
+  const el=document.getElementById('checklist');
+  if(!activeCat){ el.innerHTML='<div class="placeholder">기능성 카테고리를 선택하세요.</div>'; return; }
+  const c=CATS[activeCat];
+  let h=`<div class="ckhead"><span class="cat-name">${activeCat}</span><span class="lit">${c.desc}</span></div>`;
+  c.steps.forEach(s=>{
+    h+=`<div class="step"><div class="st">${s.st}</div><div class="sh">${s.sh}</div><ul>`;
+    s.li.forEach(li=>h+=`<li>${li}</li>`); h+=`</ul></div>`;
+  });
+  el.innerHTML=h;
+}
+
+function gauge(name,unit,val,zones,scaleMin,scaleMax,litVal,estimate){
+  const pct=v=>Math.max(0,Math.min(100,(v-scaleMin)/(scaleMax-scaleMin)*100));
+  let zoneHtml=zones.map(z=>`<div class="zone ${z.t}" style="left:${pct(z.from)}%;right:${100-pct(z.to)}%"></div>`).join('');
+  const cls=zoneOf(val,zones);
+  return `<div class="gauge">
+    <div class="gh">
+      <div class="gname">${name}<span>${unit}</span>${estimate?'<span class="badge est">추정</span>':''}</div>
+      <div class="gval">${val}${litVal!==undefined&&litVal!==null?`<span class="lit">lit. ${litVal}</span>`:''}</div>
+    </div>
+    <div class="track">${zoneHtml}<div class="marker" style="left:${pct(val)}%;background:var(--${cls})"></div></div>
+    <div class="scale"><span>${scaleMin}</span><span>${scaleMax}</span></div>
+  </div>`;
+}
+function zoneOf(v,zones){ for(const z of zones){ if(v>=z.from&&v<=z.to) return z.t; } return 'ink'; }
+
+function analyze(name){
+  const errEl=document.getElementById('err'); errEl.textContent='';
+  const smi=document.getElementById('smiles').value.trim();
+  if(!smi){ errEl.textContent='SMILES를 입력하세요.'; return; }
+  let mol,d;
+  try{ mol=parseSmiles(smi); d=descriptors(mol); }
+  catch(e){ errEl.textContent='파싱 오류: '+e.message; return; }
+
+  // name + formula
+  document.getElementById('cname').textContent = name|| '사용자 입력 구조';
+  document.getElementById('formula').innerHTML = d.formula.map(f=>`${f.el}${f.n>1?`<sub>${f.n}</sub>`:''}`).join('');
+
+  // structure render
+  drawStructure(smi);
+
+  // readout
+  document.getElementById('readout').innerHTML=`
+    <div class="ro"><div class="k">분자량</div><div class="v">${d.mw.toFixed(2)} <span class="u">g/mol</span></div></div>
+    <div class="ro"><div class="k">정확질량</div><div class="v">${d.mono.toFixed(4)}</div></div>
+    <div class="ro"><div class="k">중원자수</div><div class="v">${d.heavy}</div></div>
+    <div class="ro"><div class="k">고리수</div><div class="v">${d.rings}${d.aromRing?' <span class="u">방향족</span>':''}</div></div>`;
+
+  // literature compare
+  const L = (lastLit && lastLit.name===name) ? lastLit.lit : null;
+
+  // gauges
+  const g=[];
+  g.push(gauge('분자량 (MW)','피부투과 지표',+d.mw.toFixed(1),
+    [{t:'good',from:0,to:400},{t:'warn',from:400,to:500},{t:'flag',from:500,to:600}],0,600, L?L.mw:null,false));
+  g.push(gauge('logP','친유성',d.logp,
+    [{t:'flag',from:-3,to:0},{t:'warn',from:0,to:1},{t:'good',from:1,to:3},{t:'warn',from:3,to:5},{t:'flag',from:5,to:7}],-3,7, L?L.logp:null,true));
+  g.push(gauge('TPSA','극성표면적 Å²',d.tpsa,
+    [{t:'good',from:0,to:60},{t:'warn',from:60,to:90},{t:'flag',from:90,to:160}],0,160, L?L.tpsa:null,true));
+  g.push(gauge('HBD','Lipinski 공여',d.hbd,
+    [{t:'good',from:0,to:2},{t:'warn',from:2,to:4},{t:'flag',from:4,to:8}],0,8, null,false));
+  g.push(gauge('HBA','Lipinski 수용 (N+O)',d.hba,
+    [{t:'good',from:0,to:5},{t:'warn',from:5,to:8},{t:'flag',from:8,to:14}],0,14, null,false));
+  g.push(gauge('회전결합','분자 유연성',d.rot,
+    [{t:'good',from:0,to:5},{t:'warn',from:5,to:9},{t:'flag',from:9,to:16}],0,16, null,false));
+  document.getElementById('gauges').innerHTML=g.join('');
+
+  renderInterp(d);
+}
+
+function drawStructure(smi){
+  const cv=document.getElementById('struct');
+  const note=document.getElementById('snote');
+  if(typeof SmilesDrawer==='undefined'){
+    const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.fillStyle='#8B96A6'; ctx.font="13px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+    ctx.fillText('구조 렌더러 미로드 (오프라인) — 지표 계산은 정상', cv.width/2, cv.height/2);
+    note.textContent=''; return;
+  }
+  try{
+    const drawer=new SmilesDrawer.Drawer({width:520,height:260,bondThickness:1.1,
+      atomVisualization:'default', explicitHydrogens:false, terminalCarbons:false,
+      themes:{light:{C:'#141823',N:'#2952CC',O:'#C23A33',S:'#B5790C',
+        BACKGROUND:'#00000000'}}});
+    SmilesDrawer.parse(smi,function(tree){ drawer.draw(tree,'struct','light',false); note.textContent='2D depiction · SmilesDrawer';},
+      function(){ const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+        ctx.fillStyle='#8B96A6'; ctx.font="13px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+        ctx.fillText('이 구조는 렌더링할 수 없습니다', cv.width/2, cv.height/2); note.textContent='';});
+  }catch(e){ note.textContent=''; }
+}
+
+function renderInterp(d){
+  const el=document.getElementById('interp');
+  // permeation composite
+  let score=0;
+  score += d.mw<400?2:d.mw<500?1:0;
+  score += (d.logp>=1&&d.logp<=3)?2:(d.logp>=0&&d.logp<=5)?1:0;
+  score += d.hbd<=2?2:d.hbd<=4?1:0;
+  score += d.tpsa<60?2:d.tpsa<90?1:0;
+  const outlook = score>=7?{t:'양호',c:'good',d:'각질층 통과에 유리한 물성 범위입니다.'}
+    : score>=4?{t:'보통',c:'warn',d:'침투 보조(투과촉진제·제형 설계)가 도움될 수 있습니다.'}
+    : {t:'낮음',c:'flag',d:'표면 작용형이거나 전달체 설계가 필요할 가능성이 큽니다.'};
+
+  // phase
+  const phase = d.logp>3?{t:'유상(oil phase)',d:'친유성이 강해 오일/에멀전 유상 분산이 적합합니다.'}
+    : d.logp<0?{t:'수상(water phase)',d:'친수성이 강해 수상 가용화가 자연스럽습니다.'}
+    : {t:'경계(양친매)',d:'수·유상 모두 가능, 가용화제·계면활성제 선택이 관건입니다.'};
+
+  // lipinski-ish note (context only)
+  const viol=[d.mw>500,d.logp>5,d.hbd>5,d.hba>10].filter(Boolean).length;
+
+  el.innerHTML=`
+    <div class="outlook" style="border-color:var(--${outlook.c});background:var(--${outlook.c}-soft)">
+      <div class="ol"><b style="color:var(--${outlook.c})">피부 투과 전망</b><br>${outlook.d}</div>
+      <div class="ov" style="color:var(--${outlook.c})">${outlook.t}</div>
+    </div>
+    <div class="interp" style="margin-top:11px">
+      <div class="iblock"><div class="ih"><span class="badge ${d.logp>3?'warn':d.logp<0?'good':'good'}">제형</span><span class="t">${phase.t}</span></div><p>${phase.d}</p></div>
+      <div class="iblock"><div class="ih"><span class="badge ${viol===0?'good':viol<=1?'warn':'flag'}">참고</span><span class="t">Lipinski Ro5 위반 ${viol}건</span></div>
+        <p>경구약 기준 지표로 화장품에 직접 적용되진 않지만, 위반이 많을수록 수동 확산형 침투는 어려워지는 경향이 있습니다. (MW>500, logP>5, HBD>5, HBA>10 기준)</p></div>
+      <div class="iblock"><div class="ih"><span class="badge ${d.hbd>4?'flag':d.hbd>2?'warn':'good'}">수소결합</span><span class="t">공여 ${d.hbd} · 수용 ${d.hba}</span></div>
+        <p>${d.hbd>4?'수소결합 공여가 많아 각질층 지질 통과 저항이 큽니다 — 보습·표면 보호형으로 강점이 될 수 있습니다.':'수소결합 부담이 낮아 막 투과에 유리합니다.'}</p></div>
+    </div>`;
+}
+
+/* init */
+buildPresets(); buildCats();
+window.addEventListener('load',()=>{
+  // demo load: niacinamide
+  document.getElementById('smiles').value='O=C(N)c1cccnc1';
+  lastLit={lit:PRESETS[0].lit,name:PRESETS[0].n};
+  document.querySelector('#presets .chip').classList.add('on');
+  selectCat('미백');
+  setTimeout(()=>analyze('나이아신아마이드'),300);
+});
+</script>
