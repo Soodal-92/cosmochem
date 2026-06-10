@@ -2,6 +2,7 @@ import { useState } from 'react';
 import InputPanel from './components/InputPanel';
 import DescriptorPanel from './components/DescriptorPanel';
 import DOEPanel from './components/DOEPanel';
+import HistoryPanel from './components/HistoryPanel';
 import { analyzeSmiles } from './api';
 
 export default function App() {
@@ -53,7 +54,7 @@ export default function App() {
 
       {/* 탭 */}
       <div style={{ maxWidth: 1180, margin: '14px auto 0', padding: '0 20px', display: 'flex', gap: 4 }}>
-        {[['analyze', '구조 분석'], ['doe', 'DOE 실험계획']].map(([id, lbl]) => (
+        {[['analyze', '구조 분석'], ['doe', 'DOE 실험계획'], ['history', '히스토리']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)}
             style={{
               fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13,
@@ -84,6 +85,11 @@ export default function App() {
         {tab === 'doe' && (
           <div style={{ paddingTop: 18, maxWidth: 900 }}>
             <DOEPanel />
+          </div>
+        )}
+        {tab === 'history' && (
+          <div style={{ paddingTop: 18 }}>
+            <HistoryPanel />
           </div>
         )}
       </main>

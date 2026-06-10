@@ -1,12 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
-const key = import.meta.env.VITE_SUPABASE_KEY;
+const key = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY;
 
-export const supabase = createClient(url, key);
+export const isSupabaseConfigured = Boolean(url && key);
+
+export const supabase = isSupabaseConfigured ? createClient(url, key) : null;
+
+function ensureSupabase() {
+  if (!supabase) {
+    throw new Error('Supabase 환경변수가 설정되지 않았습니다');
+  }
+  return supabase;
+}
 
 export async function saveCompound({ name, smiles, result }) {
-  const { data, error } = await supabase.from('compounds').insert({
+  const { data, error } = await ensureSupabase().from('compounds').insert({
     name:        name || null,
     smiles,
     formula:     result.formula,
@@ -25,7 +34,7 @@ export async function saveCompound({ name, smiles, result }) {
 }
 
 export async function getCompounds() {
-  const { data, error } = await supabase
+  const { data, error } = await ensureSupabase()
     .from('compounds')
     .select('*')
     .order('created_at', { ascending: false })
@@ -35,7 +44,7 @@ export async function getCompounds() {
 }
 
 export async function saveDoeExperiment({ name, designResult, yValues, regrResult }) {
-  const { data, error } = await supabase.from('doe_experiments').insert({
+  const { data, error } = await ensureSupabase().from('doe_experiments').insert({
     name:              name || null,
     design_type:       designResult.design,
     factors:           designResult.factor_names,
@@ -50,7 +59,7 @@ export async function saveDoeExperiment({ name, designResult, yValues, regrResul
 }
 
 export async function getDoeExperiments() {
-  const { data, error } = await supabase
+  const { data, error } = await ensureSupabase()
     .from('doe_experiments')
     .select('*')
     .order('created_at', { ascending: false })

@@ -27,16 +27,19 @@ export default function DOEPanel() {
 
   // --- 저장 ---
   const [saveState, setSaveState] = useState('idle');
+  const [saveError, setSaveError] = useState('');
 
   async function handleSave() {
     if (!designResult) return;
     setSaveState('saving');
+    setSaveError('');
     const yArr = yValues.trim() ? yValues.trim().split(/[\n,\s]+/).map(Number) : null;
     try {
       await saveDoeExperiment({ name: null, designResult, yValues: yArr, regrResult });
       setSaveState('done');
       setTimeout(() => setSaveState('idle'), 2000);
-    } catch {
+    } catch (err) {
+      setSaveError(err.message);
       setSaveState('error');
       setTimeout(() => setSaveState('idle'), 2500);
     }
@@ -196,6 +199,11 @@ export default function DOEPanel() {
             </button>
           </div>
           <div style={cardB}>
+            {saveError && (
+              <div style={{ background: 'var(--flag-soft)', border: '1px solid var(--flag)', borderRadius: 10, padding: '9px 12px', marginBottom: 14, fontSize: 12, color: 'var(--flag)' }}>
+                {saveError}
+              </div>
+            )}
             {/* R² */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
               {[['R²', regrResult.r2], ['R² (보정)', regrResult.r2_adj], ['F p-value', regrResult.f_pvalue]].map(([l, v]) => (

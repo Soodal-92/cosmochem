@@ -22,14 +22,17 @@ function litFor(name) {
 
 export default function DescriptorPanel({ result, smiles, compoundName, isEstimate }) {
   const [saveState, setSaveState] = useState('idle'); // idle | saving | done | error
+  const [saveError, setSaveError] = useState('');
 
   async function handleSave() {
     setSaveState('saving');
+    setSaveError('');
     try {
       await saveCompound({ name: compoundName, smiles, result });
       setSaveState('done');
       setTimeout(() => setSaveState('idle'), 2000);
-    } catch {
+    } catch (err) {
+      setSaveError(err.message);
       setSaveState('error');
       setTimeout(() => setSaveState('idle'), 2500);
     }
@@ -78,6 +81,11 @@ export default function DescriptorPanel({ result, smiles, compoundName, isEstima
       </div>
 
       <div style={{ padding: 20 }}>
+        {saveError && (
+          <div style={{ background: 'var(--flag-soft)', border: '1px solid var(--flag)', borderRadius: 10, padding: '9px 12px', marginBottom: 14, fontSize: 12, color: 'var(--flag)' }}>
+            {saveError}
+          </div>
+        )}
         {/* 화합물명 + 분자식 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 24, fontWeight: 700, margin: 0 }}>
