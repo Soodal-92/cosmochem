@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import StructureViewer from './StructureViewer';
 import GaugeBar from './GaugeBar';
-import { saveCompound } from '../lib/supabase';
+import { saveCompound } from '../api';
 
 const PRESETS_LIT = {
   niacinamide:  { mw: 122.12, logp: -0.37, tpsa: 55.98 },

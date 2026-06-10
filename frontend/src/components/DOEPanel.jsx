@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { doeDesign, doeRegression } from '../api';
-import { saveDoeExperiment } from '../lib/supabase';
+import { doeDesign, doeRegression, saveDoeExperiment } from '../api';
 
 const card = { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', marginBottom: 16 };
 const cardH = { padding: '13px 16px', borderBottom: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', gap: 9 };

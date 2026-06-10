@@ -44,3 +44,35 @@ export async function pubchemSearch(name) {
   }
   return r.json();
 }
+
+export async function saveCompound({ name, smiles, result }) {
+  const r = await fetch(`${BASE}/compounds`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, smiles, result }),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '화합물 저장 실패'); }
+  return r.json();
+}
+
+export async function getCompounds() {
+  const r = await fetch(`${BASE}/compounds`);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '화합물 목록 조회 실패'); }
+  return r.json();
+}
+
+export async function saveDoeExperiment({ name, designResult, yValues, regrResult }) {
+  const r = await fetch(`${BASE}/doe-experiments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, designResult, yValues, regrResult }),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '실험 저장 실패'); }
+  return r.json();
+}
+
+export async function getDoeExperiments() {
+  const r = await fetch(`${BASE}/doe-experiments`);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '실험 목록 조회 실패'); }
+  return r.json();
+}

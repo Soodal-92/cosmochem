@@ -21,8 +21,18 @@ FastAPI는 단순 통로가 아니라 **라우터**다. 요청을 비용에 따�
 > 기준: **1~2초 안에 안정적으로 못 끝나면 비동기.**
 > 모든 걸 큐로 보내면 즉답할 일을 폴링으로 만들어 UX·복잡도가 나빠진다.
 
-Postgres는 체인 끝이 아니라 **API와 Worker 양쪽이 접근**한다
-(API: 작업 상태·빠른 조회 / Worker: 결과 저장).
+Postgres/Supabase 접근은 기본적으로 **FastAPI 뒤에 둔다**.
+프론트엔드는 분석·저장·조회 모두 FastAPI만 바라보고, FastAPI가 입력 검증과 데이터 저장 경로를 통제한다.
+Phase C에서 Worker가 추가되면 Worker도 같은 DB에 결과를 저장하되, 프론트가 직접 DB에 쓰는 경로는 만들지 않는다.
+
+```
+React
+  └─ FastAPI
+       ├─ RDKit / DOE 동기 계산
+       ├─ Supabase(Postgres) 저장·조회
+       └─ Redis/Celery Worker (Phase C)
+              └─ Supabase(Postgres) 결과 저장
+```
 
 ## 모듈별 도구 매핑
 
@@ -41,7 +51,7 @@ Postgres는 체인 끝이 아니라 **API와 Worker 양쪽이 접근**한다
 ## 단계별 인프라
 
 - **Phase A**: 백엔드 0원. 브라우저 프로토타입만.
-- **Phase B**: FastAPI 컨테이너 1개 + Postgres. 큐 불필요.
+- **Phase B**: FastAPI 컨테이너 1개 + Supabase(Postgres). 큐 불필요.
 - **Phase C**: docking 도입 시점에 Redis + Worker 추가.
 
 > 연구실 단위 도구이므로 마이크로서비스·k8s는 불필요.

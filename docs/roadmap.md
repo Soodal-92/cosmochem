@@ -18,7 +18,7 @@ FastAPI + RDKit. 프론트는 그대로, 추정값을 정밀값으로 교체.
 - [x] PubChem 조회 연동 (백엔드 프록시 + 브라우저 직접 호출)
 - [x] 프로토타입 → FastAPI /analyze 연동 (백엔드 켜져 있으면 RDKit 정밀값, 꺼져 있으면 JS 추정값 fallback)
 - [x] DOE 설계·분석 (pyDOE + statsmodels) — 수율·재현 모듈
-- [x] Supabase(Postgres) 데이터 계층 — compounds / doe_experiments 저장
+- [x] Supabase(Postgres) 데이터 계층 — FastAPI 경유 compounds / doe_experiments 저장·조회
 - [x] 프론트엔드를 Vite + React로 이관, API 연동
 - [ ] 저장 히스토리 고도화 — 상세 보기, 삭제, 검색/필터
 
@@ -34,5 +34,4 @@ FastAPI + RDKit. 프론트는 그대로, 추정값을 정밀값으로 교체.
 
 ## 다음 한 걸음
 
-Phase B 저장 히스토리: 저장된 화합물과 DOE 실험을 조회하고,
-상세 보기·삭제·검색/필터를 추가.
+Phase B 저장 히스토리: 저장된 화합물과 DOE 실험 상세 보기·삭제·검색/필터를 추가.

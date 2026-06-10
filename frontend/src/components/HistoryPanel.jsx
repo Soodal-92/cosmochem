@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getCompounds, getDoeExperiments, isSupabaseConfigured } from '../lib/supabase';
+import { getCompounds, getDoeExperiments } from '../api';
 
 const card = { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' };
 const cardH = { padding: '13px 16px', borderBottom: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 };
@@ -36,11 +36,10 @@ function Metric({ label, value }) {
 export default function HistoryPanel() {
   const [compounds, setCompounds] = useState([]);
   const [experiments, setExperiments] = useState([]);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   async function loadHistory() {
-    if (!isSupabaseConfigured) return;
     setLoading(true);
     setError('');
     try {
@@ -58,7 +57,6 @@ export default function HistoryPanel() {
   }
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
     let active = true;
 
     Promise.all([getCompounds(), getDoeExperiments()])
@@ -80,22 +78,6 @@ export default function HistoryPanel() {
       active = false;
     };
   }, []);
-
-  if (!isSupabaseConfigured) {
-    return (
-      <div style={card}>
-        <div style={cardH}>
-          <div>
-            <span style={{ ...mono, fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>DB</span>
-            <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, margin: '2px 0 0' }}>저장 히스토리</h2>
-          </div>
-        </div>
-        <EmptyState>
-          VITE_SUPABASE_URL과 VITE_SUPABASE_ANON_KEY를 설정하면 저장된 화합물과 DOE 실험을 볼 수 있습니다.
-        </EmptyState>
-      </div>
-    );
-  }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>

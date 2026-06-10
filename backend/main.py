@@ -9,9 +9,11 @@ from pydantic import BaseModel
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Crippen, Lipinski, rdMolDescriptors
 from urllib.parse import quote
-from typing import List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 import httpx
 import numpy as np
+import os
 import pyDOE3
 import statsmodels.api as sm
 
@@ -27,6 +29,78 @@ app.add_middleware(
 
 class MoleculeIn(BaseModel):
     smiles: str
+
+
+class CompoundSaveIn(BaseModel):
+    name: Optional[str] = None
+    smiles: str
+    result: Dict[str, Any]
+
+
+class DoeExperimentSaveIn(BaseModel):
+    name: Optional[str] = None
+    designResult: Dict[str, Any]
+    yValues: Optional[List[float]] = None
+    regrResult: Optional[Dict[str, Any]] = None
+
+
+def load_local_env():
+    """Load backend/.env for local development without adding a runtime dependency."""
+    env_path = Path(__file__).with_name(".env")
+    if not env_path.exists():
+        return
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_local_env()
+
+
+def supabase_config():
+    url = os.getenv("SUPABASE_URL") or os.getenv("VITE_SUPABASE_URL")
+    key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_ANON_KEY")
+        or os.getenv("VITE_SUPABASE_ANON_KEY")
+        or os.getenv("VITE_SUPABASE_KEY")
+    )
+    if not url or not key:
+        raise HTTPException(503, "Supabase 환경변수가 설정되지 않았습니다")
+    return url.rstrip("/"), key
+
+
+async def supabase_request(method: str, table: str, *, payload: Optional[Dict[str, Any]] = None, query: str = ""):
+    url, key = supabase_config()
+    endpoint = f"{url}/rest/v1/{table}{query}"
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    if method.upper() == "POST":
+        headers["Prefer"] = "return=representation"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.request(method, endpoint, headers=headers, json=payload)
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Supabase API timeout")
+    except httpx.RequestError:
+        raise HTTPException(502, "Supabase API 요청 실패")
+
+    if resp.status_code >= 400:
+        detail = resp.text
+        try:
+            detail = resp.json().get("message") or detail
+        except ValueError:
+            pass
+        raise HTTPException(resp.status_code, detail)
+
+    return resp.json()
 
 
 @app.get("/health")
@@ -202,6 +276,59 @@ def doe_regression(req: DOERegressionIn):
         "residuals":    [round(float(v), 4) for v in model.resid],
         "n_obs":        int(model.nobs),
     }
+
+
+# ---- 데이터 저장/조회: 프론트는 FastAPI만 바라보고, DB 접근은 API 계층에서 통제 ----
+
+@app.post("/compounds")
+async def save_compound(req: CompoundSaveIn):
+    smiles = req.smiles.strip()
+    if not smiles:
+        raise HTTPException(400, "SMILES가 비어 있습니다")
+    result = req.result
+    row = {
+        "name":        req.name or None,
+        "smiles":      smiles,
+        "formula":     result.get("formula"),
+        "mw":          result.get("mw"),
+        "exact_mass":  result.get("exact_mass"),
+        "logp":        result.get("logp"),
+        "tpsa":        result.get("tpsa"),
+        "hbd":         result.get("hbd"),
+        "hba":         result.get("hba"),
+        "rot_bonds":   result.get("rot_bonds"),
+        "heavy_atoms": result.get("heavy_atoms"),
+        "rings":       result.get("rings"),
+    }
+    rows = await supabase_request("POST", "compounds", payload=row)
+    return rows[0] if rows else None
+
+
+@app.get("/compounds")
+async def list_compounds():
+    return await supabase_request("GET", "compounds", query="?select=*&order=created_at.desc&limit=50")
+
+
+@app.post("/doe-experiments")
+async def save_doe_experiment(req: DoeExperimentSaveIn):
+    design = req.designResult
+    row = {
+        "name":              req.name or None,
+        "design_type":       design.get("design"),
+        "factors":           design.get("factor_names"),
+        "runs":              design.get("runs"),
+        "coded":             design.get("coded"),
+        "n_runs":            design.get("n_runs"),
+        "y_values":          req.yValues,
+        "regression_result": req.regrResult,
+    }
+    rows = await supabase_request("POST", "doe_experiments", payload=row)
+    return rows[0] if rows else None
+
+
+@app.get("/doe-experiments")
+async def list_doe_experiments():
+    return await supabase_request("GET", "doe_experiments", query="?select=*&order=created_at.desc&limit=20")
 
 
 # ---- 비동기 경로(Phase C): 작업 큐에 등록하고 job_id 반환 ----
