@@ -7,6 +7,7 @@ httpx
 pandas
 statsmodels
 scipy
+pyDOE3
 # Phase C (필요 시)
 # celery
 # redis

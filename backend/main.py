@@ -9,7 +9,11 @@ from pydantic import BaseModel
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Crippen, Lipinski, rdMolDescriptors
 from urllib.parse import quote
+from typing import List, Optional
 import httpx
+import numpy as np
+import pyDOE3
+import statsmodels.api as sm
 
 app = FastAPI(title="CosmoChem API", version="0.2.0")
 
@@ -95,6 +99,108 @@ async def pubchem_lookup(name: str):
         "hbd":        p.get("HBondDonorCount"),
         "hba":        p.get("HBondAcceptorCount"),
         "rot_bonds":  p.get("RotatableBondCount"),
+    }
+
+
+# ---- DOE: 실험계획 생성 및 수율 회귀 분석 ----
+
+class DOEFactor(BaseModel):
+    name: str
+    low: float
+    high: float
+
+class DOEDesignIn(BaseModel):
+    factors: List[DOEFactor]
+    design: str = "ccf"     # "ccf" | "bbi" | "full2"
+
+class DOERegressionIn(BaseModel):
+    factors: List[str]
+    X: List[List[float]]    # 실험 조건 행렬 (각 행이 한 실험)
+    y: List[float]          # 수율 측정값
+
+
+@app.post("/doe/design")
+def doe_design(req: DOEDesignIn):
+    """실험계획 매트릭스 생성: CCD(CCF/BBI) 또는 2-level full factorial."""
+    n = len(req.factors)
+    if n < 2 or n > 6:
+        raise HTTPException(400, "인자 수는 2~6개여야 합니다")
+
+    if req.design == "ccf":
+        coded = pyDOE3.ccdesign(n, center=(2, 2), face="ccf")
+    elif req.design == "bbi":
+        if n < 3:
+            raise HTTPException(400, "BBI 설계는 인자 3개 이상 필요")
+        coded = pyDOE3.bbdesign(n, center=2)
+    elif req.design == "full2":
+        coded = pyDOE3.ff2n(n)
+    else:
+        raise HTTPException(400, "design은 'ccf', 'bbi', 'full2' 중 하나여야 합니다")
+
+    # 코드값(-1~+1) → 실제 수준 변환
+    runs = []
+    for row in coded:
+        run = {}
+        for i, f in enumerate(req.factors):
+            mid = (f.high + f.low) / 2
+            half = (f.high - f.low) / 2
+            run[f.name] = round(mid + row[i] * half, 6)
+        runs.append(run)
+
+    return {
+        "design": req.design,
+        "n_factors": n,
+        "n_runs": len(runs),
+        "factor_names": [f.name for f in req.factors],
+        "runs": runs,
+        "coded": coded.tolist(),
+    }
+
+
+@app.post("/doe/regression")
+def doe_regression(req: DOERegressionIn):
+    """수율 데이터 → OLS 회귀 분석 (주효과 + 2차항 + 교호작용)."""
+    X_raw = np.array(req.X)
+    y = np.array(req.y)
+
+    if X_raw.shape[0] != len(y):
+        raise HTTPException(400, "X 행 수와 y 길이가 다릅니다")
+    if X_raw.shape[1] != len(req.factors):
+        raise HTTPException(400, "X 열 수와 factors 길이가 다릅니다")
+
+    # 2차 반응표면 모델: 절편 + 주효과 + 제곱항 + 교호작용
+    n_f = len(req.factors)
+    cols, names = [], ["intercept"]
+
+    for i in range(n_f):
+        cols.append(X_raw[:, i])
+        names.append(req.factors[i])
+    for i in range(n_f):
+        cols.append(X_raw[:, i] ** 2)
+        names.append(f"{req.factors[i]}²")
+    for i in range(n_f):
+        for j in range(i + 1, n_f):
+            cols.append(X_raw[:, i] * X_raw[:, j])
+            names.append(f"{req.factors[i]}×{req.factors[j]}")
+
+    X_model = sm.add_constant(np.column_stack(cols))
+    if X_model.shape[0] < X_model.shape[1]:
+        raise HTTPException(400, f"실험 수({X_model.shape[0]})가 파라미터 수({X_model.shape[1]})보다 적습니다. 실험을 더 추가하세요.")
+
+    model = sm.OLS(y, X_model).fit()
+
+    coefficients = {names[i]: round(float(model.params[i]), 6) for i in range(len(names))}
+    pvalues      = {names[i]: round(float(model.pvalues[i]), 6) for i in range(len(names))}
+
+    return {
+        "r2":           round(float(model.rsquared), 4),
+        "r2_adj":       round(float(model.rsquared_adj), 4),
+        "f_pvalue":     round(float(model.f_pvalue), 6),
+        "coefficients": coefficients,
+        "pvalues":      pvalues,
+        "y_pred":       [round(float(v), 4) for v in model.fittedvalues],
+        "residuals":    [round(float(v), 4) for v in model.resid],
+        "n_obs":        int(model.nobs),
     }
 
 
