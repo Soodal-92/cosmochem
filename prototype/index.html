@@ -679,15 +679,34 @@ function drawStructure(smi){
     ctx.fillText('구조 렌더러 미로드 (오프라인) — 지표 계산은 정상', cv.width/2, cv.height/2);
     note.textContent=''; return;
   }
-  try{
-    const drawer=new SmilesDrawer.Drawer({width:520,height:260,bondThickness:1.1,
+  function makeDrawer(){
+    return new SmilesDrawer.Drawer({width:520,height:260,bondThickness:1.1,
       atomVisualization:'default', explicitHydrogens:false, terminalCarbons:false,
       themes:{light:{C:'#141823',N:'#2952CC',O:'#C23A33',S:'#B5790C',
         BACKGROUND:'#00000000'}}});
-    SmilesDrawer.parse(smi,function(tree){ drawer.draw(tree,'struct','light',false); note.textContent='2D depiction · SmilesDrawer';},
-      function(){ const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
-        ctx.fillStyle='#8B96A6'; ctx.font="13px 'JetBrains Mono',monospace"; ctx.textAlign='center';
-        ctx.fillText('이 구조는 렌더링할 수 없습니다', cv.width/2, cv.height/2); note.textContent='';});
+  }
+  function simplify(s){
+    // 입체화학 제거: [C@@H] / [C@H] → C, @ 표기 제거
+    return s.replace(/\[C@@H\]/g,'C').replace(/\[C@H\]/g,'C')
+            .replace(/\[C@@\]/g,'C').replace(/\[C@\]/g,'C')
+            .replace(/@@/g,'').replace(/@/g,'').replace(/\//g,'').replace(/\\/g,'');
+  }
+  try{
+    const drawer=makeDrawer();
+    SmilesDrawer.parse(smi,
+      function(tree){ drawer.draw(tree,'struct','light',false); note.textContent='2D depiction · SmilesDrawer'; },
+      function(){
+        // 입체화학 제거 후 재시도
+        const simple=simplify(smi);
+        const drawer2=makeDrawer();
+        SmilesDrawer.parse(simple,
+          function(tree){ drawer2.draw(tree,'struct','light',false); note.textContent='2D depiction · SmilesDrawer (stereo simplified)'; },
+          function(){
+            const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+            ctx.fillStyle='#8B96A6'; ctx.font="13px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+            ctx.fillText('이 구조는 렌더링할 수 없습니다', cv.width/2, cv.height/2); note.textContent='';
+          });
+      });
   }catch(e){ note.textContent=''; }
 }
 
