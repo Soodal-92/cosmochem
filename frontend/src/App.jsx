@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import InputPanel from './components/InputPanel';
+import CandidatePanel from './components/CandidatePanel';
 import DescriptorPanel from './components/DescriptorPanel';
 import DOEPanel from './components/DOEPanel';
 import HistoryPanel from './components/HistoryPanel';
@@ -44,17 +45,17 @@ export default function App() {
             CosmoChem
           </div>
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--faint)', textTransform: 'uppercase', letterSpacing: '.14em' }}>
-            structure analysis console
+            cosmetic molecule design console
           </span>
         </div>
         <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--muted)', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 999, padding: '6px 13px' }}>
-          Module <b style={{ color: 'var(--accent)' }}>01</b> · 물질 선정 + 구조 분석 · React
+          Module <b style={{ color: 'var(--accent)' }}>02</b> · 후보 설계 + 합성 의사결정 · React
         </div>
       </header>
 
       {/* 탭 */}
       <div style={{ maxWidth: 1180, margin: '14px auto 0', padding: '0 20px', display: 'flex', gap: 4 }}>
-        {[['analyze', '구조 분석'], ['doe', 'DOE 실험계획'], ['history', '히스토리']].map(([id, lbl]) => (
+        {[['analyze', '구조 분석'], ['candidate', '후보 설계'], ['doe', 'DOE 실험계획'], ['history', '히스토리']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)}
             style={{
               fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13,
@@ -85,6 +86,11 @@ export default function App() {
         {tab === 'doe' && (
           <div style={{ paddingTop: 18, maxWidth: 900 }}>
             <DOEPanel />
+          </div>
+        )}
+        {tab === 'candidate' && (
+          <div style={{ paddingTop: 18 }}>
+            <CandidatePanel />
           </div>
         )}
         {tab === 'history' && (

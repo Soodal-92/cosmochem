@@ -76,3 +76,13 @@ export async function getDoeExperiments() {
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '실험 목록 조회 실패'); }
   return r.json();
 }
+
+export async function generateCandidates({ smiles, name, target }) {
+  const r = await fetch(`${BASE}/candidates/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ smiles, name, target }),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '후보 설계 실패'); }
+  return r.json();
+}

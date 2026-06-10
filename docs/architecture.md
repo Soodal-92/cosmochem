@@ -12,9 +12,10 @@
 
 ## 동기 / 비동기 분기 (핵심 설계)
 
-FastAPI는 단순 통로가 아니라 **라우터**다. 요청을 비용에 따라 나눈다.
+CosmoChem의 중심은 단순 descriptor 계산이 아니라 **화장품 후보물질 설계 의사결정**이다.
+FastAPI는 단순 통로가 아니라 계산 비용과 데이터 책임을 나누는 **라우터**다.
 
-- **빠른 경로(동기)** — 단일 분자 descriptor 등 수 밀리초 작업. 요청 안에서 바로 계산해 응답.
+- **빠른 경로(동기)** — 단일 분자 descriptor, 규칙 기반 후보 생성, 1차 효능/물성 스크리닝, DOE 설계.
 - **느린 경로(비동기)** — docking 1건, QSAR batch, 후보 100개 랭킹 등 초~분 단위.
   큐에 등록 → `job_id` 반환 → 프론트가 폴링/SSE로 진행률·결과 조회.
 
@@ -28,17 +29,28 @@ Phase C에서 Worker가 추가되면 Worker도 같은 DB에 결과를 저장하�
 ```
 React
   └─ FastAPI
-       ├─ RDKit / DOE 동기 계산
+       ├─ RDKit descriptor / 후보 생성 / DOE 동기 계산
        ├─ Supabase(Postgres) 저장·조회
        └─ Redis/Celery Worker (Phase C)
               └─ Supabase(Postgres) 결과 저장
 ```
+
+## 제품 모듈
+
+| 모듈 | 현재 역할 | 고도화 방향 |
+|------|-----------|-------------|
+| 구조 분석 | 입력 물질의 RDKit descriptor 계산·저장 | 부분구조/유사도 검색, 문헌값 비교 |
+| 후보 설계 | 목표 효능별 규칙 기반 후보 생성·점수화 | reaction template, 유사체 생성, QSAR ranking |
+| 합성/정제/분석 제안 | 후보별 합성 방향, 정제법, LC-MS/NMR/HPLC 확인점 초안 | 문헌 기반 조건 추천, 위험성/수율 예측 |
+| DOE | 실험계획 생성과 수율 회귀 | 베이지안 최적화, batch 기록 연동 |
+| 히스토리 | 화합물/실험 저장 조회 | 상세 보기, 삭제, 검색, 후보 설계 기록 |
 
 ## 모듈별 도구 매핑
 
 | 모듈 | 핵심 도구 | 경로 |
 |------|-----------|------|
 | 물질 선정·구조 확인 | RDKit, Postgres+RDKit 카트리지 | 동기 |
+| 후보 설계·유도체화 | RDKit reaction template, fragment rules | 동기 → 혼합 |
 | 반응조건 세팅 | pyDOE, Ax/BoTorch(베이지안 최적화), AiZynthFinder/ASKCOS | 혼합 |
 | 정제법 세팅 | RDKit 물성 기반 룰 엔진 | 동기 |
 | 수율·재현 | pandas, statsmodels, scipy.stats | 동기 |

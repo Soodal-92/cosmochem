@@ -44,6 +44,28 @@ def test_analyze_missing_field():
     assert r.status_code == 422
 
 
+def test_generate_candidates_valid():
+    r = client.post("/candidates/generate", json={
+        "name": "ferulic acid",
+        "smiles": "COc1cc(/C=C/C(=O)O)ccc1O",
+        "target": "antioxidant",
+    })
+    assert r.status_code == 200
+    d = r.json()
+    assert d["input"]["target"] == "antioxidant"
+    assert len(d["candidates"]) >= 2
+    first = d["candidates"][0]
+    assert "scores" in first
+    assert "synthesis" in first
+    assert "purification" in first
+    assert "analysis" in first
+
+
+def test_generate_candidates_invalid_smiles():
+    r = client.post("/candidates/generate", json={"smiles": "not-a-smiles"})
+    assert r.status_code == 400
+
+
 @pytest.mark.parametrize("name,expected_cid", [
     ("niacinamide", 936),
     ("ascorbic acid", 54670067),

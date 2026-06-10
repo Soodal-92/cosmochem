@@ -1,0 +1,183 @@
+import { useState } from 'react';
+import { generateCandidates } from '../api';
+
+const TARGETS = [
+  ['brightening', '미백'],
+  ['antioxidant', '항산화'],
+  ['anti_inflammatory', '항염'],
+  ['anti_wrinkle', '주름/탄력'],
+  ['moisturizing', '보습/장벽'],
+];
+
+const PRESETS = [
+  ['niacinamide', 'O=C(N)c1cccnc1', '나이아신아마이드'],
+  ['ascorbic acid', 'OC[C@H](O)[C@H]1OC(=O)C(O)=C1O', '아스코르브산'],
+  ['ferulic acid', 'COc1cc(/C=C/C(=O)O)ccc1O', '페룰산'],
+  ['kojic acid', 'OCC1=CC(=O)C(O)=CO1', '코지산'],
+  ['resveratrol', 'OC1=CC(=CC(=C1)/C=C/c1ccc(O)cc1)O', '레스베라트롤'],
+];
+
+const card = { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', marginBottom: 16 };
+const cardH = { padding: '13px 16px', borderBottom: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 };
+const cardB = { padding: 18 };
+const label = { display: 'block', fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 6 };
+const input = { fontFamily: "'JetBrains Mono',monospace", fontSize: 13, background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '9px 10px', outline: 'none', color: 'var(--ink)', width: '100%' };
+const btn = (c = 'var(--accent)') => ({ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, color: '#fff', background: c, border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' });
+const mono = { fontFamily: "'JetBrains Mono',monospace" };
+
+function Score({ label: scoreLabel, value }) {
+  const color = value >= 70 ? 'var(--good)' : value >= 45 ? 'var(--warn)' : 'var(--flag)';
+  return (
+    <div style={{ background: 'var(--panel-2)', borderRadius: 8, padding: '9px 10px' }}>
+      <div style={{ fontSize: 10, color: 'var(--faint)', marginBottom: 3 }}>{scoreLabel}</div>
+      <div style={{ ...mono, fontSize: 14, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+}
+
+function SectionList({ title, items }) {
+  return (
+    <div>
+      <div style={{ ...label, marginBottom: 5 }}>{title}</div>
+      <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
+        {items.map((item, i) => <li key={i}>{item}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+export default function CandidatePanel() {
+  const [target, setTarget] = useState('brightening');
+  const [name, setName] = useState('ferulic acid');
+  const [smiles, setSmiles] = useState('COc1cc(/C=C/C(=O)O)ccc1O');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  function selectPreset([, presetSmiles, labelText]) {
+    setName(labelText);
+    setSmiles(presetSmiles);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    setResult(null);
+    setLoading(true);
+    try {
+      setResult(await generateCandidates({ smiles, name, target }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 18, alignItems: 'start' }}>
+      <div style={card}>
+        <div style={cardH}>
+          <div>
+            <span style={{ ...mono, fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>DESIGN</span>
+            <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, margin: '2px 0 0' }}>후보물질 설계</h2>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} style={cardB}>
+          <label style={label}>목표 효능</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+            {TARGETS.map(([id, text]) => (
+              <button key={id} type="button" onClick={() => setTarget(id)}
+                style={{ ...btn(target === id ? 'var(--accent)' : 'var(--panel-2)'), color: target === id ? '#fff' : 'var(--ink)', border: '1px solid var(--line)', fontSize: 12 }}>
+                {text}
+              </button>
+            ))}
+          </div>
+
+          <label style={label}>출발 물질명</label>
+          <input style={{ ...input, marginBottom: 12 }} value={name} onChange={e => setName(e.target.value)} placeholder="예: ferulic acid" />
+
+          <label style={label}>출발 물질 SMILES</label>
+          <textarea style={{ ...input, minHeight: 88, resize: 'vertical', marginBottom: 12 }} value={smiles} onChange={e => setSmiles(e.target.value)} />
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
+            {PRESETS.map(p => (
+              <button key={p[0]} type="button" onClick={() => selectPreset(p)}
+                style={{ ...btn('var(--panel-2)'), color: 'var(--ink)', border: '1px solid var(--line)', fontSize: 12, padding: '6px 10px' }}>
+                {p[2]}
+              </button>
+            ))}
+          </div>
+
+          <button type="submit" disabled={loading || !smiles.trim()} style={{ ...btn(), width: '100%', opacity: loading ? 0.65 : 1 }}>
+            {loading ? '설계 중...' : '후보 생성'}
+          </button>
+          {error && <div style={{ marginTop: 12, color: 'var(--flag)', fontSize: 12 }}>{error}</div>}
+        </form>
+      </div>
+
+      <div>
+        {!result && (
+          <div style={card}>
+            <div style={cardH}>
+              <div>
+                <span style={{ ...mono, fontSize: 11, color: 'var(--good)', fontWeight: 700 }}>OUTPUT</span>
+                <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, margin: '2px 0 0' }}>설계 결과</h2>
+              </div>
+            </div>
+            <div style={{ padding: 36, color: 'var(--faint)', textAlign: 'center', fontSize: 13 }}>
+              출발 물질과 목표 효능을 선택해 후보 물질, 합성 방향, 정제/분석 초안을 생성하세요.
+            </div>
+          </div>
+        )}
+
+        {result?.candidates?.map((candidate, index) => (
+          <article key={`${candidate.label}-${candidate.smiles}-${index}`} style={card}>
+            <div style={cardH}>
+              <div>
+                <span style={{ ...mono, fontSize: 11, color: index === 0 ? 'var(--muted)' : 'var(--accent)', fontWeight: 700 }}>
+                  {candidate.candidate_type.toUpperCase()}
+                </span>
+                <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, margin: '2px 0 0' }}>{candidate.label}</h2>
+              </div>
+              <span style={{ ...mono, fontSize: 11, color: 'var(--faint)' }}>confidence {candidate.confidence}</span>
+            </div>
+            <div style={cardB}>
+              <div style={{ ...mono, fontSize: 11, color: 'var(--muted)', overflowWrap: 'anywhere', marginBottom: 14 }}>
+                {candidate.smiles}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 18 }}>
+                <Score label="목표 효능" value={candidate.scores.target} />
+                <Score label="피부 투과" value={candidate.scores.skin_permeation} />
+                <Score label="제형 적합" value={candidate.scores.formulation_fit} />
+                <Score label="합성 접근성" value={candidate.scores.synthetic_access} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 18 }}>
+                {[
+                  ['MW', candidate.descriptors.mw],
+                  ['logP', candidate.descriptors.logp],
+                  ['TPSA', candidate.descriptors.tpsa],
+                  ['HBD/HBA', `${candidate.descriptors.hbd}/${candidate.descriptors.hba}`],
+                  ['rot', candidate.descriptors.rot_bonds],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ background: 'var(--panel-2)', borderRadius: 8, padding: '8px 9px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--faint)' }}>{k}</div>
+                    <div style={{ ...mono, fontSize: 12, fontWeight: 700 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <SectionList title="합성 방향" items={candidate.synthesis} />
+                <SectionList title="정제 방법" items={candidate.purification} />
+                <SectionList title="분석 방법" items={candidate.analysis} />
+                <SectionList title="해석" items={candidate.rationale} />
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}

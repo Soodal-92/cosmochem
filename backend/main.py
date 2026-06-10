@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rdkit import Chem
-from rdkit.Chem import Descriptors, Crippen, Lipinski, rdMolDescriptors
+from rdkit.Chem import AllChem, Descriptors, Crippen, Lipinski, rdMolDescriptors
 from urllib.parse import quote
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -42,6 +42,12 @@ class DoeExperimentSaveIn(BaseModel):
     designResult: Dict[str, Any]
     yValues: Optional[List[float]] = None
     regrResult: Optional[Dict[str, Any]] = None
+
+
+class CandidateGenerateIn(BaseModel):
+    smiles: str
+    name: Optional[str] = None
+    target: str = "brightening"
 
 
 def load_local_env():
@@ -275,6 +281,227 @@ def doe_regression(req: DOERegressionIn):
         "y_pred":       [round(float(v), 4) for v in model.fittedvalues],
         "residuals":    [round(float(v), 4) for v in model.resid],
         "n_obs":        int(model.nobs),
+    }
+
+
+def descriptor_payload(m: Chem.Mol):
+    return {
+        "formula":     rdMolDescriptors.CalcMolFormula(m),
+        "mw":          round(Descriptors.MolWt(m), 2),
+        "exact_mass":  round(Descriptors.ExactMolWt(m), 4),
+        "logp":        round(Crippen.MolLogP(m), 2),
+        "tpsa":        round(Descriptors.TPSA(m), 2),
+        "hbd":         Lipinski.NumHDonors(m),
+        "hba":         Lipinski.NumHAcceptors(m),
+        "rot_bonds":   int(Descriptors.NumRotatableBonds(m)),
+        "heavy_atoms": m.GetNumHeavyAtoms(),
+        "rings":       rdMolDescriptors.CalcNumRings(m),
+    }
+
+
+def clamp_score(v: float):
+    return round(max(0, min(100, v)), 1)
+
+
+SMARTS = {
+    "phenol": Chem.MolFromSmarts("c[OX2H]"),
+    "alcohol": Chem.MolFromSmarts("[CX4][OX2H]"),
+    "carboxylic_acid": Chem.MolFromSmarts("C(=O)[OX2H1]"),
+    "amide": Chem.MolFromSmarts("C(=O)N"),
+    "aromatic": Chem.MolFromSmarts("a"),
+    "mixed_anhydride": Chem.MolFromSmarts("C(=O)OC(C)=O"),
+}
+
+
+REACTIONS = {
+    "o_acetyl": AllChem.ReactionFromSmarts("[O;H1:1]>>[O:1]C(=O)C"),
+    "methyl_ester": AllChem.ReactionFromSmarts("[C:1](=[O:2])[O;H1:3]>>[C:1](=[O:2])OC"),
+}
+
+
+def feature_flags(m: Chem.Mol):
+    return {
+        name: bool(m.HasSubstructMatch(pattern))
+        for name, pattern in SMARTS.items()
+        if name != "mixed_anhydride"
+    }
+
+
+def try_reaction(m: Chem.Mol, reaction_name: str):
+    rxn = REACTIONS[reaction_name]
+    products = []
+    try:
+        for product_set in rxn.RunReactants((m,)):
+            p = product_set[0]
+            Chem.SanitizeMol(p)
+            if reaction_name == "o_acetyl" and p.HasSubstructMatch(SMARTS["mixed_anhydride"]):
+                continue
+            smiles = Chem.MolToSmiles(p, canonical=True)
+            if smiles not in products:
+                products.append(smiles)
+    except Exception:
+        return []
+    return products[:3]
+
+
+def efficacy_scores(desc: Dict[str, Any], flags: Dict[str, bool], target: str):
+    logp = desc["logp"]
+    mw = desc["mw"]
+    tpsa = desc["tpsa"]
+    hbd = desc["hbd"]
+    phenol_bonus = 18 if flags["phenol"] else 0
+    aromatic_bonus = 10 if flags["aromatic"] else 0
+    amide_bonus = 10 if flags["amide"] else 0
+
+    base = {
+        "brightening": 38 + phenol_bonus + amide_bonus + (12 if 0 <= logp <= 3 else 0) + (8 if mw < 400 else -8),
+        "antioxidant": 35 + phenol_bonus * 1.5 + aromatic_bonus + (8 if hbd >= 1 else 0),
+        "anti_inflammatory": 34 + aromatic_bonus + (14 if 1 <= logp <= 4 else 0) + (8 if tpsa < 90 else -8),
+        "anti_wrinkle": 32 + phenol_bonus + (12 if 1 <= logp <= 4 else 0) + (8 if mw < 500 else -10),
+        "moisturizing": 35 + (18 if tpsa >= 70 else 0) + (12 if hbd >= 2 else 0) + (8 if logp < 2 else -8),
+    }.get(target, 40)
+
+    skin = 52 + (18 if 0 <= logp <= 3 else -12) + (12 if mw < 500 else -18) + (8 if tpsa < 90 else -14)
+    formulation = 55 + (12 if -1 <= logp <= 4 else -10) + (10 if mw < 600 else -14) + (8 if desc["rot_bonds"] <= 8 else -8)
+    synthesis = 58 + (12 if flags["alcohol"] or flags["phenol"] or flags["carboxylic_acid"] else -10) + (8 if mw < 500 else -12)
+
+    return {
+        "target": clamp_score(base),
+        "skin_permeation": clamp_score(skin),
+        "formulation_fit": clamp_score(formulation),
+        "synthetic_access": clamp_score(synthesis),
+    }
+
+
+def purification_plan(desc: Dict[str, Any]):
+    if desc["logp"] >= 3:
+        return [
+            "비극성 불순물 제거를 위해 hexane/ethyl acetate 계열 컬럼 조건을 우선 검토",
+            "최종 순도 확인은 reverse-phase HPLC로 보완",
+        ]
+    if desc["tpsa"] >= 90:
+        return [
+            "극성이 높으므로 reverse-phase C18 또는 prep-HPLC 우선 검토",
+            "염/당류성 불순물이 예상되면 물/MeOH 구배와 동결건조를 검토",
+        ]
+    return [
+        "ethyl acetate/MeOH 소량 첨가 조건의 silica 컬럼 또는 재결정 스크리닝",
+        "분취 전 TLC/HPLC로 주성분 분리 가능성 확인",
+    ]
+
+
+def analysis_plan(desc: Dict[str, Any]):
+    mz = round(desc["exact_mass"] + 1.0073, 4)
+    return [
+        f"LC-MS: [M+H]+ 예상 m/z {mz}",
+        "1H/13C NMR: 도입된 acyl/ester/amide 주변 chemical shift 변화 확인",
+        "HPLC/UPLC: 254 nm 및 280 nm 파장 우선, 필요 시 ELSD/CAD 보완",
+        "IR: C=O, O-H/N-H, aromatic C=C 등 주요 작용기 피크 확인",
+    ]
+
+
+def synthesis_plan(kind: str, flags: Dict[str, bool]):
+    if kind == "acetylated":
+        return [
+            "출발물질의 phenolic/aliphatic OH를 acetyl 보호 또는 지용성 조절기로 유도체화",
+            "Ac2O 또는 acetyl chloride 계열 조건을 소량 스크리닝",
+            "염기 조건, 온도, 반응 시간을 DOE 인자로 설정",
+        ]
+    if kind == "methyl_ester":
+        return [
+            "carboxylic acid를 methyl ester로 전환하여 지용성/피부 투과 가능성 비교",
+            "MeOH 산 촉매 또는 coupling 조건을 소량 스크리닝",
+            "가수분해 안정성과 잔류 산 촉매 제거를 확인",
+        ]
+    if kind == "reference":
+        return [
+            "입력 물질은 benchmark로 두고 유도체 후보와 물성/효능 점수를 비교",
+            "합성 대상이 아니라면 공급원, 순도, 안정성, 제형 compatibility를 우선 확인",
+        ]
+    if flags["amide"]:
+        return [
+            "amide 골격은 유지하고 치환기 변경 또는 염 형성으로 용해도/투과성 조절",
+            "직접 합성보다 유사체 후보를 문헌/상용 원료에서 먼저 탐색",
+        ]
+    return [
+        "명확한 반응성 작용기가 적으므로 유사체 검색 또는 fragment 치환 전략 우선",
+        "반응 template 적용 전 보호기 필요성과 선택성을 먼저 검토",
+    ]
+
+
+def make_candidate(label: str, smiles: str, target: str, kind: str, confidence: str):
+    m = Chem.MolFromSmiles(smiles)
+    if m is None:
+        return None
+    desc = descriptor_payload(m)
+    flags = feature_flags(m)
+    scores = efficacy_scores(desc, flags, target)
+    return {
+        "label": label,
+        "smiles": Chem.MolToSmiles(m, canonical=True),
+        "candidate_type": kind,
+        "confidence": confidence,
+        "descriptors": desc,
+        "scores": scores,
+        "rationale": [
+            "RDKit descriptor와 작용기 규칙 기반의 1차 스크리닝 결과입니다.",
+            "점수는 실험 효능이 아니라 후보 우선순위화 지표입니다.",
+        ],
+        "synthesis": synthesis_plan(kind, flags),
+        "purification": purification_plan(desc),
+        "analysis": analysis_plan(desc),
+    }
+
+
+@app.post("/candidates/generate")
+def generate_candidates(req: CandidateGenerateIn):
+    smiles = req.smiles.strip()
+    m = Chem.MolFromSmiles(smiles)
+    if m is None:
+        raise HTTPException(400, "유효하지 않은 SMILES")
+
+    target = req.target.strip() or "brightening"
+    flags = feature_flags(m)
+    base_smiles = Chem.MolToSmiles(m, canonical=True)
+    candidates = []
+
+    base = make_candidate(req.name or "입력 물질", base_smiles, target, "reference", "high")
+    if base:
+        candidates.append(base)
+
+    if flags["phenol"] or flags["alcohol"]:
+        for i, product in enumerate(try_reaction(m, "o_acetyl"), start=1):
+            cand = make_candidate(f"O-acetyl 유도체 {i}", product, target, "acetylated", "medium")
+            if cand:
+                candidates.append(cand)
+
+    if flags["carboxylic_acid"]:
+        for i, product in enumerate(try_reaction(m, "methyl_ester"), start=1):
+            cand = make_candidate(f"Methyl ester 유도체 {i}", product, target, "methyl_ester", "medium")
+            if cand:
+                candidates.append(cand)
+
+    if len(candidates) == 1:
+        candidates.append({
+            **base,
+            "label": "유사체 설계 방향",
+            "candidate_type": "strategy",
+            "confidence": "low",
+            "rationale": [
+                "자동 변환 가능한 OH/COOH 작용기가 적어 구조 생성 대신 유사체 설계 전략을 제안합니다.",
+                "방향족 치환기, 염 형성, prodrug-like ester 도입 가능성을 문헌 기반으로 검토하세요.",
+            ],
+            "synthesis": synthesis_plan("strategy", flags),
+        })
+
+    return {
+        "input": {
+            "name": req.name,
+            "smiles": base_smiles,
+            "target": target,
+            "features": flags,
+        },
+        "candidates": candidates[:8],
     }
 
 
