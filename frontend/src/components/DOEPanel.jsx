@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { doeDesign, doeRegression } from '../api';
+import { saveDoeExperiment } from '../lib/supabase';
 
 const card = { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', marginBottom: 16 };
 const cardH = { padding: '13px 16px', borderBottom: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', gap: 9 };
@@ -23,6 +24,23 @@ export default function DOEPanel() {
   const [regrResult, setRegrResult] = useState(null);
   const [regrLoading, setRegrLoading] = useState(false);
   const [regrError, setRegrError] = useState('');
+
+  // --- 저장 ---
+  const [saveState, setSaveState] = useState('idle');
+
+  async function handleSave() {
+    if (!designResult) return;
+    setSaveState('saving');
+    const yArr = yValues.trim() ? yValues.trim().split(/[\n,\s]+/).map(Number) : null;
+    try {
+      await saveDoeExperiment({ name: null, designResult, yValues: yArr, regrResult });
+      setSaveState('done');
+      setTimeout(() => setSaveState('idle'), 2000);
+    } catch {
+      setSaveState('error');
+      setTimeout(() => setSaveState('idle'), 2500);
+    }
+  }
 
   function updateFactor(i, field, val) {
     setFactors(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f));
@@ -162,9 +180,20 @@ export default function DOEPanel() {
       {/* 회귀 결과 */}
       {regrResult && (
         <div style={card}>
-          <div style={cardH}>
-            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--good)', fontWeight: 600 }}>결과</span>
-            <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, margin: 0 }}>회귀 결과</h2>
+          <div style={{ ...cardH, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--good)', fontWeight: 600 }}>결과</span>
+              <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, margin: 0 }}>회귀 결과</h2>
+            </div>
+            <button onClick={handleSave} disabled={saveState === 'saving'}
+              style={{
+                fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12,
+                border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+                background: saveState === 'done' ? 'var(--good)' : saveState === 'error' ? 'var(--flag)' : 'var(--accent)',
+                color: '#fff', opacity: saveState === 'saving' ? 0.6 : 1,
+              }}>
+              {saveState === 'saving' ? '저장 중…' : saveState === 'done' ? '저장 완료' : saveState === 'error' ? '저장 실패' : '실험 저장'}
+            </button>
           </div>
           <div style={cardB}>
             {/* R² */}

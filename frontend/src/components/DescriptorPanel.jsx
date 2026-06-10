@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import StructureViewer from './StructureViewer';
 import GaugeBar from './GaugeBar';
+import { saveCompound } from '../lib/supabase';
 
 const PRESETS_LIT = {
   niacinamide:  { mw: 122.12, logp: -0.37, tpsa: 55.98 },
@@ -19,6 +21,20 @@ function litFor(name) {
 }
 
 export default function DescriptorPanel({ result, smiles, compoundName, isEstimate }) {
+  const [saveState, setSaveState] = useState('idle'); // idle | saving | done | error
+
+  async function handleSave() {
+    setSaveState('saving');
+    try {
+      await saveCompound({ name: compoundName, smiles, result });
+      setSaveState('done');
+      setTimeout(() => setSaveState('idle'), 2000);
+    } catch {
+      setSaveState('error');
+      setTimeout(() => setSaveState('idle'), 2500);
+    }
+  }
+
   if (!result) {
     return (
       <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
@@ -43,11 +59,22 @@ export default function DescriptorPanel({ result, smiles, compoundName, isEstima
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>2D</span>
           <h2 style={{ fontFamily: "'Space Grotesk',system-ui,sans-serif", fontSize: 14, fontWeight: 600, margin: 0 }}>구조 · 분자 지표</h2>
         </div>
-        {!isEstimate && (
-          <span style={{ fontSize: 10, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 4, padding: '2px 8px', fontFamily: "'JetBrains Mono',monospace" }}>
-            RDKit 정밀값
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!isEstimate && (
+            <span style={{ fontSize: 10, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 4, padding: '2px 8px', fontFamily: "'JetBrains Mono',monospace" }}>
+              RDKit 정밀값
+            </span>
+          )}
+          <button onClick={handleSave} disabled={saveState === 'saving'}
+            style={{
+              fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12,
+              border: 'none', borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+              background: saveState === 'done' ? 'var(--good)' : saveState === 'error' ? 'var(--flag)' : 'var(--accent)',
+              color: '#fff', opacity: saveState === 'saving' ? 0.6 : 1,
+            }}>
+            {saveState === 'saving' ? '저장 중…' : saveState === 'done' ? '저장 완료' : saveState === 'error' ? '저장 실패' : '저장'}
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: 20 }}>
