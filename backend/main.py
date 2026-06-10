@@ -347,11 +347,12 @@ def clamp_score(v: float):
 
 
 SMARTS = {
-    "phenol": Chem.MolFromSmarts("c[OX2H]"),
-    "alcohol": Chem.MolFromSmarts("[CX4][OX2H]"),
+    "phenol":          Chem.MolFromSmarts("c[OX2H]"),
+    "alcohol":         Chem.MolFromSmarts("[CX4][OX2H]"),
     "carboxylic_acid": Chem.MolFromSmarts("C(=O)[OX2H1]"),
-    "amide": Chem.MolFromSmarts("C(=O)N"),
-    "aromatic": Chem.MolFromSmarts("a"),
+    "ester":           Chem.MolFromSmarts("[CX3](=[OX1])[OX2;H0][C,c]"),
+    "amide":           Chem.MolFromSmarts("C(=O)N"),
+    "aromatic":        Chem.MolFromSmarts("a"),
     "mixed_anhydride": Chem.MolFromSmarts("C(=O)OC(C)=O"),
 }
 
@@ -416,7 +417,8 @@ def efficacy_scores(desc: Dict[str, Any], flags: Dict[str, bool], target: str):
     }
 
 
-def purification_plan(desc: Dict[str, Any]):
+def purification_plan(desc: Dict[str, Any]) -> List[str]:
+    """Flat list kept for backward compatibility."""
     if desc["logp"] >= 3:
         return [
             "비극성 불순물 제거를 위해 hexane/ethyl acetate 계열 컬럼 조건을 우선 검토",
@@ -433,7 +435,8 @@ def purification_plan(desc: Dict[str, Any]):
     ]
 
 
-def analysis_plan(desc: Dict[str, Any]):
+def analysis_plan(desc: Dict[str, Any]) -> List[str]:
+    """Flat list kept for backward compatibility."""
     mz = round(desc["exact_mass"] + 1.0073, 4)
     return [
         f"LC-MS: [M+H]+ 예상 m/z {mz}",
@@ -441,6 +444,257 @@ def analysis_plan(desc: Dict[str, Any]):
         "HPLC/UPLC: 254 nm 및 280 nm 파장 우선, 필요 시 ELSD/CAD 보완",
         "IR: C=O, O-H/N-H, aromatic C=C 등 주요 작용기 피크 확인",
     ]
+
+
+# ---- 고도화된 정제/분석 추천 (structured, with reason) ----
+
+def classify_compound(flags: Dict[str, bool], desc: Dict[str, Any]) -> List[str]:
+    """RDKit descriptor + SMARTS 작용기 정보로 물질 유형 분류."""
+    types: List[str] = []
+    if flags["phenol"]:
+        types.append("phenolic")
+    if flags["carboxylic_acid"]:
+        types.append("carboxylic_acid")
+    if flags.get("ester"):
+        types.append("ester")
+    if flags["amide"]:
+        types.append("amide")
+    if desc["logp"] >= 3.5:
+        types.append("high_logP")
+    if desc["tpsa"] >= 90:
+        types.append("high_TPSA")
+    if not types:
+        if desc["heavy_atoms"] < 6 and desc["rings"] == 0:
+            types.append("inorganic_placeholder")
+        else:
+            types.append("general")
+    return types
+
+
+def purification_plan_structured(flags: Dict[str, bool], desc: Dict[str, Any]) -> Dict[str, Any]:
+    """물질 유형별 세분화된 정제 추천 (method + reason)."""
+    types = classify_compound(flags, desc)
+    steps: List[Dict[str, str]] = []
+
+    if "phenolic" in types:
+        steps.append({
+            "method": "Silica gel column (EtOAc/hexane 구배, Rf 0.3–0.5 목표)",
+            "reason": "phenolic OH 극성 차이를 활용해 비극성 불순물과 분리 — Rf 낮으면 MeOH 소량 첨가",
+        })
+        steps.append({
+            "method": "EtOAc/hexane 또는 EtOH/water 재결정 스크리닝",
+            "reason": "phenol류는 결정성이 있는 경우 재결정이 컬럼 대비 수율·순도 면에서 유리",
+        })
+
+    if "carboxylic_acid" in types:
+        steps.append({
+            "method": "RP-HPLC (C18, 0.1% formic acid/MeCN 구배)",
+            "reason": "COOH 이온화 억제를 위해 산성 이동상 필수 — pH 미조절 시 피크 테일링 발생",
+        })
+        steps.append({
+            "method": "산-염기 추출 (pH 2 이하 중성화 → EtOAc 파티셔닝)",
+            "reason": "비산성 불순물을 EtOAc 층으로 제거하고 수층에서 목표 산을 회수",
+        })
+
+    if "ester" in types:
+        steps.append({
+            "method": "Silica gel column (EtOAc/hexane 저극성 구배)",
+            "reason": "에스터는 중간 극성 — 비극성 계열 컬럼으로 충분히 분리 가능",
+        })
+        steps.append({
+            "method": "정제 후 가수분해 안정성 확인 (pH 4·7·9, 40°C 24 h)",
+            "reason": "에스터 결합은 수분·pH에 민감 — 정제 중·보관 시 분해 모니터링 필수",
+        })
+
+    if "amide" in types:
+        steps.append({
+            "method": "RP-HPLC (C18 또는 C8) 또는 MeOH/water prep-HPLC",
+            "reason": "amide는 실리카 강흡착 우려 — 역상계가 재현성 높고 안전",
+        })
+        steps.append({
+            "method": "DMF/water 또는 EtOH/water 재결정 시도",
+            "reason": "amide 화합물은 수소결합 특성으로 극성 혼합용매에서 결정화 잘 됨",
+        })
+
+    if "high_logP" in types:
+        steps.append({
+            "method": f"Hexane/EtOAc 고비율 normal-phase column (logP {desc['logp']:.1f})",
+            "reason": "고지용성 — 지질성 불순물 분리에 비극성 이동상 필요, 용해 시 DCM/CHCl3 권장",
+        })
+        steps.append({
+            "method": "최종 순도 확인: analytical RP-HPLC (MeCN/water 고비율)",
+            "reason": "고지용성은 역상에서 긴 체류시간·날카로운 피크 → 순도 정량에 유리",
+        })
+
+    if "high_TPSA" in types:
+        steps.append({
+            "method": f"RP prep-HPLC (C18, 낮은 유기용매 비율 시작, TPSA {desc['tpsa']:.0f} Å²)",
+            "reason": "극성 면적이 커서 역상 강보유 예상 — 구배 최적화 필수, 등용매 이동상 사용 금지",
+        })
+        steps.append({
+            "method": "동결건조 (lyophilization) 로 건조·보관",
+            "reason": "고극성 화합물은 가열 농축 시 분해 가능 — 동결건조가 안전한 건조법",
+        })
+
+    if "inorganic_placeholder" in types:
+        steps.append({
+            "method": "물 또는 MeOH/water 계열 재결정",
+            "reason": "무기/미네랄류 성분은 수계 재결정이 기본 정제법 — 유기 용매 반응성 사전 확인",
+        })
+
+    if not steps:
+        steps.append({
+            "method": "TLC 스크리닝 후 silica column 또는 prep-HPLC 조건 결정",
+            "reason": "뚜렷한 반응 작용기가 없어 경험적 TLC 탐색 후 규모 확대 권장",
+        })
+
+    steps.append({
+        "method": "Analytical RP-HPLC (254 nm / ELSD) 로 최종 순도 수치화",
+        "reason": "분취 후 반드시 분석용 HPLC로 순도 정량 — 화장품 원료 기준 98% 이상 목표",
+    })
+
+    return {"compound_types": types, "steps": steps}
+
+
+def analysis_plan_structured(flags: Dict[str, bool], desc: Dict[str, Any]) -> Dict[str, Any]:
+    """목적별 분석 추천 (structure_confirmation / purity / residual_solvent / stability / efficacy_screening)."""
+    mz_pos = round(desc["exact_mass"] + 1.0073, 4)
+    mz_neg = round(desc["exact_mass"] - 1.0073, 4)
+    types = classify_compound(flags, desc)
+
+    # 1. 구조 확인
+    ionization = (
+        f"ESI+ [M+H]⁺ {mz_pos} / ESI− [M−H]⁻ {mz_neg}"
+        if ("carboxylic_acid" in types or "phenolic" in types)
+        else f"ESI+ [M+H]⁺ {mz_pos}"
+    )
+    structure_confirmation = [
+        {
+            "method": f"LC-MS ({ionization})",
+            "reason": "분자량으로 구조 가설 검증 — 이온화 모드는 작용기에 따라 선택",
+        },
+        {
+            "method": f"HR-MS: exact mass {desc['exact_mass']} Da 확인",
+            "reason": "측정값과 이론값 5 ppm 이내 일치 시 분자식 확정",
+        },
+    ]
+    if flags["aromatic"] or flags["phenol"]:
+        structure_confirmation.append({
+            "method": "1H NMR (CDCl3 또는 DMSO-d6): 방향족 영역 6–9 ppm",
+            "reason": "방향족 proton coupling pattern(J값)으로 치환 위치·개수 확인",
+        })
+    else:
+        structure_confirmation.append({
+            "method": "1H NMR: 지방족 영역 (0–5 ppm) 중심",
+            "reason": "방향족 proton 없으므로 CH/CH2/CH3 pattern으로 골격 확인",
+        })
+    structure_confirmation.append({
+        "method": "13C NMR (DEPT-135 포함)",
+        "reason": "탄소 종류(CH·CH2·CH3·C) 구분으로 골격 확정 — HSQC/HMBC로 후속 상관",
+    })
+    if flags["amide"]:
+        structure_confirmation.append({
+            "method": "IR: amide C=O (~1650 cm⁻¹), N-H 굽힘 (~1550 cm⁻¹)",
+            "reason": "amide carbonyl은 ester(~1735)·acid(~1710)와 위치 달라 도입 여부 1차 확인",
+        })
+    if flags.get("ester"):
+        structure_confirmation.append({
+            "method": "IR: ester C=O (~1735 cm⁻¹), C-O 신축 (1000–1300 cm⁻¹)",
+            "reason": "에스터 특성 흡수대로 amide·acid와 구별 — 가수분해 후 피크 소실로 검증 가능",
+        })
+
+    # 2. 순도
+    if flags["aromatic"] or flags["phenol"]:
+        purity = [
+            {
+                "method": "RP-HPLC (C18, 254 nm + 280 nm UV, 0.1% formic acid/MeCN)",
+                "reason": "방향족 chromophore — dual wavelength로 불순물 프로파일 강화, 감도 우수",
+            },
+        ]
+    else:
+        purity = [
+            {
+                "method": "RP-HPLC (C18, ELSD 또는 CAD 검출기)",
+                "reason": "UV chromophore 약할 경우 ELSD/CAD로 발색단 없는 화합물도 범용 검출",
+            },
+        ]
+    purity.append({
+        "method": "qNMR: 내부표준 (말레산 또는 다이메틸술폰) 사용",
+        "reason": "표준품 없이 절대 순도 측정 가능 — HPLC와 상호 검증으로 신뢰도 향상",
+    })
+
+    # 3. 잔류 용매
+    residual_solvent = [
+        {
+            "method": "1H NMR 잔류 용매 피크 스크리닝 (EtOAc 1.99 ppm, hexane 0.88 ppm, DCM 5.30 ppm)",
+            "reason": "정제 직후 잔류 유기용매를 NMR로 빠르게 1차 확인 — 건조 불충분 시 쉽게 판별",
+        },
+        {
+            "method": "GC headspace analysis (ICH Q3C Class 2/3 기준)",
+            "reason": "ICH 가이드라인 준수를 위한 잔류 용매 정량 — 화장품 원료 규격 요건 충족",
+        },
+    ]
+
+    # 4. 안정성
+    stability: List[Dict[str, str]] = []
+    if "phenolic" in types:
+        stability.append({
+            "method": "가속 안정성 (40°C/75% RH, 2주) + 광안정성 (ICH Q1B, D65 200 W·h/m²)",
+            "reason": "phenol류는 산화·광분해 취약 — quinone계 분해물 생성 및 변색 여부 확인",
+        })
+    if "ester" in types:
+        stability.append({
+            "method": "pH-stability profile (pH 4·7·9 완충액, 60°C 24 h → HPLC 분석)",
+            "reason": "에스터 결합은 산·염기 가수분해에 민감 — 제형 pH 범위(4–7)에서 안정성 필수 확인",
+        })
+    if "high_logP" in types:
+        stability.append({
+            "method": "산화 안정성 (0.3% H2O2 또는 AIBN, 25°C 24 h)",
+            "reason": f"logP {desc['logp']:.1f} — 지질성 화합물 자동산화 취약 가능성, LC-MS 분해물 프로파일링",
+        })
+    if "amide" in types:
+        stability.append({
+            "method": "강산·강염기 가수분해 (1 N HCl / 1 N NaOH, 60°C 6 h)",
+            "reason": "amide 결합은 극단적 pH에서 COOH/amine으로 가수분해 — 내성 범위 파악",
+        })
+    if not stability:
+        stability.append({
+            "method": "가속 안정성 기본 프로토콜 (40°C/75% RH, 4주)",
+            "reason": "화장품 원료 ICH 기반 기본 스크리닝 — 외관·HPLC 순도 주기적 모니터링",
+        })
+    stability.append({
+        "method": "분해물 LC-MS 프로파일링 (시험 전·후 비교)",
+        "reason": "분해 경로 확인 및 주요 분해물 구조 파악 — 이후 배합 조건·포장재 선정에 활용",
+    })
+
+    # 5. 효능 스크리닝
+    efficacy_screening: List[Dict[str, str]] = []
+    if "phenolic" in types or flags["aromatic"]:
+        efficacy_screening.append({
+            "method": "DPPH radical 소거능 (IC50, MeOH, 517 nm)",
+            "reason": "phenolic 화합물의 라디칼 공여 능력 — 항산화 지표 1차 스크리닝으로 가장 신속",
+        })
+        efficacy_screening.append({
+            "method": "ABTS radical 소거능 (Trolox 대비 TEAC 값)",
+            "reason": "DPPH 보완 — 수용성 환경 항산화 측정, 화장품 수상 배합 조건과 유사",
+        })
+    if desc["tpsa"] < 90 and desc["mw"] < 500:
+        efficacy_screening.append({
+            "method": "PAMPA (Parallel Artificial Membrane Permeability Assay): Peff 측정",
+            "reason": f"TPSA {desc['tpsa']:.0f} Å², MW {desc['mw']:.0f} — 피부 투과 가능성 in vitro 1차 평가",
+        })
+    efficacy_screening.append({
+        "method": "세포 안전성 (MTT assay, HaCaT keratinocyte, 24 h)",
+        "reason": "화장품 원료 필수 안전성 확인 — IC50 > 100 μM 기준, 피부 자극 평가로 연결",
+    })
+
+    return {
+        "structure_confirmation": structure_confirmation,
+        "purity": purity,
+        "residual_solvent": residual_solvent,
+        "stability": stability,
+        "efficacy_screening": efficacy_screening,
+    }
 
 
 def synthesis_plan(kind: str, flags: Dict[str, bool]):
@@ -493,6 +747,8 @@ def make_candidate(label: str, smiles: str, target: str, kind: str, confidence: 
         "synthesis": synthesis_plan(kind, flags),
         "purification": purification_plan(desc),
         "analysis": analysis_plan(desc),
+        "purification_plan": purification_plan_structured(flags, desc),
+        "analysis_plan": analysis_plan_structured(flags, desc),
     }
 
 

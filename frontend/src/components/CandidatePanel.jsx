@@ -26,6 +26,25 @@ const input = { fontFamily: "'JetBrains Mono',monospace", fontSize: 13, backgrou
 const btn = (c = 'var(--accent)') => ({ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, color: '#fff', background: c, border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' });
 const mono = { fontFamily: "'JetBrains Mono',monospace" };
 
+const TYPE_META = {
+  phenolic:             { label: '페놀성',    color: '#22c55e' },
+  carboxylic_acid:      { label: '카르복실산', color: 'var(--accent)' },
+  ester:                { label: '에스터',    color: '#8b5cf6' },
+  amide:                { label: '아미드',    color: '#f59e0b' },
+  high_logP:            { label: '고지용성',  color: '#ef4444' },
+  high_TPSA:            { label: '고극성',    color: '#06b6d4' },
+  inorganic_placeholder:{ label: '무기/미네랄', color: 'var(--muted)' },
+  general:              { label: '일반',      color: 'var(--faint)' },
+};
+
+const ANALYSIS_SECTIONS = [
+  ['structure_confirmation', '구조 확인'],
+  ['purity',                 '순도'],
+  ['residual_solvent',       '잔류 용매'],
+  ['stability',              '안정성'],
+  ['efficacy_screening',     '효능 스크리닝'],
+];
+
 function Score({ label: scoreLabel, value }) {
   const color = value >= 70 ? 'var(--good)' : value >= 45 ? 'var(--warn)' : 'var(--flag)';
   return (
@@ -43,6 +62,86 @@ function SectionList({ title, items }) {
       <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
         {items.map((item, i) => <li key={i}>{item}</li>)}
       </ul>
+    </div>
+  );
+}
+
+function TypeTag({ type }) {
+  const meta = TYPE_META[type] || { label: type, color: 'var(--faint)' };
+  return (
+    <span style={{
+      ...mono, fontSize: 10, fontWeight: 600,
+      color: meta.color,
+      background: `${meta.color}1a`,
+      border: `1px solid ${meta.color}44`,
+      borderRadius: 999, padding: '2px 8px',
+    }}>
+      {meta.label}
+    </span>
+  );
+}
+
+function MethodItem({ method, reason, index }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+      <span style={{ ...mono, flexShrink: 0, fontSize: 10, color: 'var(--accent)', fontWeight: 700, marginTop: 3 }}>
+        {index != null ? `${index}.` : '•'}
+      </span>
+      <div>
+        <div style={{ fontSize: 12, color: 'var(--ink)', lineHeight: 1.55 }}>{method}</div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>
+          이유: {reason}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PurificationCard({ plan }) {
+  if (!plan) return null;
+  const { compound_types = [], steps = [] } = plan;
+  return (
+    <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 10, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        <span style={{ ...label, margin: 0 }}>정제 방법</span>
+        {compound_types.map(t => <TypeTag key={t} type={t} />)}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {steps.map((step, i) => (
+          <MethodItem key={i} method={step.method} reason={step.reason} index={i + 1} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnalysisCard({ plan }) {
+  if (!plan) return null;
+  return (
+    <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 10, padding: 14 }}>
+      <div style={{ ...label, marginBottom: 12 }}>분석 방법</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {ANALYSIS_SECTIONS.map(([key, sectionLabel]) => {
+          const items = plan[key];
+          if (!items || items.length === 0) return null;
+          return (
+            <div key={key}>
+              <div style={{
+                fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 700,
+                color: 'var(--accent)', marginBottom: 8,
+                textTransform: 'uppercase', letterSpacing: '.07em',
+              }}>
+                ▸ {sectionLabel}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 6 }}>
+                {items.map((item, i) => (
+                  <MethodItem key={i} method={item.method} reason={item.reason} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -173,12 +272,19 @@ export default function CandidatePanel() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <SectionList title="합성 방향" items={candidate.synthesis} />
-                <SectionList title="정제 방법" items={candidate.purification} />
-                <SectionList title="분석 방법" items={candidate.analysis} />
                 <SectionList title="해석" items={candidate.rationale} />
               </div>
+
+              {candidate.purification_plan
+                ? <div style={{ marginBottom: 14 }}><PurificationCard plan={candidate.purification_plan} /></div>
+                : <div style={{ marginBottom: 14 }}><SectionList title="정제 방법" items={candidate.purification} /></div>
+              }
+              {candidate.analysis_plan
+                ? <AnalysisCard plan={candidate.analysis_plan} />
+                : <SectionList title="분석 방법" items={candidate.analysis} />
+              }
             </div>
           </article>
         ))}

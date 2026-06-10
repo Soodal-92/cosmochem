@@ -62,10 +62,62 @@ def test_generate_candidates_valid():
     assert d["input"]["target"] == "antioxidant"
     assert len(d["candidates"]) >= 2
     first = d["candidates"][0]
+    # backward-compat fields
     assert "scores" in first
     assert "synthesis" in first
     assert "purification" in first
     assert "analysis" in first
+    # new structured fields
+    assert "purification_plan" in first
+    assert "analysis_plan" in first
+
+
+def test_purification_plan_structure():
+    """purification_plan 구조: compound_types 리스트 + steps (method/reason 필드)."""
+    r = client.post("/candidates/generate", json={
+        "smiles": "COc1cc(/C=C/C(=O)O)ccc1O",  # ferulic acid: phenolic + carboxylic_acid
+        "target": "antioxidant",
+    })
+    assert r.status_code == 200
+    pp = r.json()["candidates"][0]["purification_plan"]
+    assert "compound_types" in pp
+    assert "steps" in pp
+    types = pp["compound_types"]
+    assert "phenolic" in types
+    assert "carboxylic_acid" in types
+    for step in pp["steps"]:
+        assert "method" in step, "step에 method 필드 없음"
+        assert "reason" in step, "step에 reason 필드 없음"
+        assert step["method"], "method가 비어 있음"
+        assert step["reason"], "reason이 비어 있음"
+
+
+def test_analysis_plan_structure():
+    """analysis_plan 구조: 5개 카테고리 각각 method/reason 포함."""
+    r = client.post("/candidates/generate", json={
+        "smiles": "O=C(N)c1cccnc1",  # niacinamide: amide + aromatic
+        "target": "brightening",
+    })
+    assert r.status_code == 200
+    ap = r.json()["candidates"][0]["analysis_plan"]
+    for section in ["structure_confirmation", "purity", "residual_solvent", "stability", "efficacy_screening"]:
+        assert section in ap, f"analysis_plan에 {section} 없음"
+        assert len(ap[section]) > 0, f"{section} 항목이 비어 있음"
+        for item in ap[section]:
+            assert "method" in item
+            assert "reason" in item
+
+
+def test_compound_type_ester():
+    """메틸 에스터 유도체는 ester 타입으로 분류."""
+    r = client.post("/candidates/generate", json={
+        "smiles": "COC(=O)/C=C/c1ccc(O)cc1OC",  # methyl ferulate
+        "target": "antioxidant",
+    })
+    assert r.status_code == 200
+    first = r.json()["candidates"][0]
+    types = first["purification_plan"]["compound_types"]
+    assert "ester" in types
 
 
 def test_generate_candidates_invalid_smiles():
