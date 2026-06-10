@@ -14,8 +14,9 @@
 
 FastAPI + RDKit. 프론트는 그대로, 추정값을 정밀값으로 교체.
 
-- [ ] FastAPI `/analyze` — RDKit 정밀 descriptor (동기)
-- [ ] PubChem 조회 연동
+- [x] FastAPI `/analyze` — RDKit 정밀 descriptor (동기)
+- [x] PubChem 조회 연동 (백엔드 프록시 + 브라우저 직접 호출)
+- [x] 프로토타입 → FastAPI /analyze 연동 (백엔드 켜져 있으면 RDKit 정밀값, 꺼져 있으면 JS 추정값 fallback)
 - [ ] DOE 설계·분석 (pyDOE + statsmodels) — 수율·재현 모듈
 - [ ] Supabase(Postgres) 데이터 계층, 부분구조 검색
 - [ ] 프론트엔드를 Vite + React로 이관, API 연동
@@ -32,5 +33,5 @@ FastAPI + RDKit. 프론트는 그대로, 추정값을 정밀값으로 교체.
 
 ## 다음 한 걸음
 
-Phase B의 첫 작업: `backend/main.py`의 `/analyze` 엔드포인트에
-RDKit 정밀 descriptor 계산을 구현하고, 프로토타입의 추정 logP를 이 값으로 교체.
+Phase B DOE 모듈: `backend/main.py`에 `/doe` 엔드포인트를 추가하여
+pyDOE + statsmodels 기반 실험계획 설계 및 수율 회귀 분석을 구현.

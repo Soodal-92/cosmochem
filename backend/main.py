@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Crippen, Lipinski, rdMolDescriptors
+from urllib.parse import quote
 import httpx
 
 app = FastAPI(title="CosmoChem API", version="0.2.0")
@@ -33,7 +34,10 @@ def health():
 @app.post("/analyze")
 def analyze(mol: MoleculeIn):
     """SMILES → RDKit 정밀 descriptor."""
-    m = Chem.MolFromSmiles(mol.smiles)
+    smiles = mol.smiles.strip()
+    if not smiles:
+        raise HTTPException(400, "SMILES가 비어 있습니다")
+    m = Chem.MolFromSmiles(smiles)
     if m is None:
         raise HTTPException(400, "유효하지 않은 SMILES")
     return {
@@ -54,32 +58,43 @@ def analyze(mol: MoleculeIn):
 @app.get("/pubchem/{name}")
 async def pubchem_lookup(name: str):
     """PubChem에서 화합물명으로 검색하여 SMILES 및 기본 정보 반환."""
+    safe_name = quote(name.strip())
+    if not safe_name:
+        raise HTTPException(400, "검색어가 비어 있습니다")
     url = (
         "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"
-        f"{name}/property/"
+        f"{safe_name}/property/"
         "IsomericSMILES,IUPACName,MolecularFormula,"
         "MolecularWeight,ExactMass,XLogP,TPSA,"
         "HBondDonorCount,HBondAcceptorCount,RotatableBondCount/JSON"
     )
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(url)
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
+    except httpx.TimeoutException:
+        raise HTTPException(504, "PubChem API timeout")
+    except httpx.RequestError:
+        raise HTTPException(502, "PubChem API 요청 실패")
     if resp.status_code == 404:
         raise HTTPException(404, f"'{name}'을(를) PubChem에서 찾을 수 없습니다")
     if resp.status_code != 200:
         raise HTTPException(502, "PubChem API 오류")
-    props = resp.json()["PropertyTable"]["Properties"][0]
+    props = resp.json().get("PropertyTable", {}).get("Properties", [])
+    if not props:
+        raise HTTPException(404, f"'{name}'에 대한 결과가 없습니다")
+    p = props[0]
     return {
-        "cid":        props.get("CID"),
-        "iupac_name": props.get("IUPACName"),
-        "formula":    props.get("MolecularFormula"),
-        "smiles":     props.get("IsomericSMILES"),
-        "mw":         props.get("MolecularWeight"),
-        "exact_mass": props.get("ExactMass"),
-        "logp":       props.get("XLogP"),
-        "tpsa":       props.get("TPSA"),
-        "hbd":        props.get("HBondDonorCount"),
-        "hba":        props.get("HBondAcceptorCount"),
-        "rot_bonds":  props.get("RotatableBondCount"),
+        "cid":        p.get("CID"),
+        "iupac_name": p.get("IUPACName"),
+        "formula":    p.get("MolecularFormula"),
+        "smiles":     p.get("IsomericSMILES"),
+        "mw":         p.get("MolecularWeight"),
+        "exact_mass": p.get("ExactMass"),
+        "logp":       p.get("XLogP"),
+        "tpsa":       p.get("TPSA"),
+        "hbd":        p.get("HBondDonorCount"),
+        "hba":        p.get("HBondAcceptorCount"),
+        "rot_bonds":  p.get("RotatableBondCount"),
     }
 
 

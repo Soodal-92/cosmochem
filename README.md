@@ -17,7 +17,7 @@
 | 단계 | 내용 | 상태 |
 |------|------|------|
 | **Phase A** | 브라우저 프로토타입 — 물질 선정 + 구조 분석 (SMILES → 분자식·질량·descriptor·해석) | ✅ 동작 |
-| **Phase B** | FastAPI + RDKit 백엔드 — 정밀 descriptor, DOE, 통계 | ⬜ 예정 |
+| **Phase B** | FastAPI + RDKit 백엔드 — 정밀 descriptor, PubChem 연동, DOE, 통계 | 🔄 진행 중 |
 | **Phase C** | 작업 큐 기반 비동기 계산 — docking(Vina), QSAR, 후보 랭킹 | ⬜ 예정 |
 
 `prototype/index.html` 을 브라우저로 열면 Phase A가 바로 실행됩니다. 설치 불필요.
@@ -63,10 +63,12 @@ open prototype/index.html        # macOS
 python -m http.server 8000       # http://localhost:8000/prototype/
 ```
 
-### Phase B — 백엔드 (구현 예정)
+### Phase B — 백엔드
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+.venv\Scripts\activate           # Windows
+# source .venv/bin/activate      # macOS/Linux
 pip install -r requirements.txt
 uvicorn main:app --reload        # http://localhost:8000/docs
 ```
