@@ -8,8 +8,8 @@ const PRESETS = [
   { label: '알파-아르부틴',    smiles: 'OC[C@H]1O[C@@H](Oc2ccc(O)cc2)[C@H](O)[C@@H](O)[C@@H]1O', name: 'alphaarbutin' },
   { label: '코지산',           smiles: 'OCC1=CC(=O)C(O)=CO1', name: 'kojicacid' },
   { label: '레스베라트롤',     smiles: 'OC1=CC(=CC(=C1)/C=C/c1ccc(O)cc1)O', name: 'resveratrol' },
-  { label: '페룰산',           smiles: 'COc1cc(/C=C/C(=O)O)ccc1O', name: 'caffeine' },
-  { label: '살리실산',         smiles: 'OC(=O)c1ccccc1O', name: 'salicylic' },
+  { label: '페룰산',           smiles: 'COc1cc(/C=C/C(=O)O)ccc1O', name: 'ferulicacid' },
+  { label: '살리실산',         smiles: 'OC(=O)c1ccccc1O', name: 'salicylicacid' },
   { label: '아데노신',         smiles: 'Nc1ncnc2c1ncn2[C@@H]1O[C@H](CO)[C@@H](O)[C@H]1O', name: 'adenosine' },
   { label: '판테놀',           smiles: 'CC(C)(CO)[C@@H](O)C(=O)NCCCO', name: 'pantenol' },
 ];
@@ -92,13 +92,13 @@ export default function InputPanel({ onAnalyze, loading }) {
 
         {/* PubChem 검색 */}
         <form onSubmit={handlePubchem}>
-          <label style={labelStyle}>PubChem 이름 검색</label>
+          <label style={labelStyle}>PubChem 이름 / CAS No. 검색</label>
           <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
             <input
               style={inputStyle}
               value={pcName}
               onChange={e => setPcName(e.target.value)}
-              placeholder="예: niacinamide, kojic acid"
+              placeholder="예: phenol, 108-95-2, niacinamide"
             />
             <button type="submit" style={btnStyle('#11876A')} disabled={pcLoading || !pcName.trim()}>
               {pcLoading ? '검색 중…' : '검색'}

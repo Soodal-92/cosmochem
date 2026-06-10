@@ -77,12 +77,15 @@ def test_generate_candidates_invalid_smiles():
     ("niacinamide", 936),
     ("ascorbic acid", 54670067),
     ("ferulic acid", 445858),
+    ("Phenol", 996),
+    ("108-95-2", 996),
 ])
 def test_pubchem_known(name, expected_cid):
     r = client.get(f"/pubchem/{name}")
     assert r.status_code == 200
     d = r.json()
     assert d.get("cid") == expected_cid, f"{name}: CID 불일치"
+    assert d.get("smiles"), f"{name}: smiles 없음"
     assert d.get("formula"), f"{name}: formula 없음"
 
 

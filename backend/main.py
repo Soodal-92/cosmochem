@@ -139,19 +139,38 @@ def analyze(mol: MoleculeIn):
     }
 
 
-# ---- PubChem 프록시: 화합물명 → SMILES + 기본 정보 ----
-@app.get("/pubchem/{name}")
-async def pubchem_lookup(name: str):
-    """PubChem에서 화합물명으로 검색하여 SMILES 및 기본 정보 반환."""
-    safe_name = quote(name.strip())
-    if not safe_name:
+PUBCHEM_PROPERTIES = (
+    "CanonicalSMILES,IsomericSMILES,IUPACName,MolecularFormula,"
+    "MolecularWeight,ExactMass,XLogP,TPSA,"
+    "HBondDonorCount,HBondAcceptorCount,RotatableBondCount"
+)
+
+
+def pubchem_smiles(props: Dict[str, Any]):
+    smiles = (
+        props.get("IsomericSMILES")
+        or props.get("CanonicalSMILES")
+        or props.get("SMILES")
+        or props.get("ConnectivitySMILES")
+    )
+    if not smiles:
+        return None
+    mol = Chem.MolFromSmiles(smiles)
+    return Chem.MolToSmiles(mol, canonical=True) if mol is not None else smiles
+
+
+# ---- PubChem 프록시: 화합물명/CAS No./CID → SMILES + 기본 정보 ----
+@app.get("/pubchem/{query}")
+async def pubchem_lookup(query: str):
+    """PubChem에서 화합물명, CAS No., CID로 검색하여 SMILES 및 기본 정보 반환."""
+    term = query.strip()
+    safe_query = quote(term)
+    if not safe_query:
         raise HTTPException(400, "검색어가 비어 있습니다")
+    namespace = "cid" if term.isdigit() else "name"
     url = (
-        "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/"
-        f"{safe_name}/property/"
-        "IsomericSMILES,IUPACName,MolecularFormula,"
-        "MolecularWeight,ExactMass,XLogP,TPSA,"
-        "HBondDonorCount,HBondAcceptorCount,RotatableBondCount/JSON"
+        f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/{namespace}/"
+        f"{safe_query}/property/{PUBCHEM_PROPERTIES}/JSON"
     )
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -161,18 +180,19 @@ async def pubchem_lookup(name: str):
     except httpx.RequestError:
         raise HTTPException(502, "PubChem API 요청 실패")
     if resp.status_code == 404:
-        raise HTTPException(404, f"'{name}'을(를) PubChem에서 찾을 수 없습니다")
+        raise HTTPException(404, f"'{query}'을(를) PubChem에서 찾을 수 없습니다")
     if resp.status_code != 200:
         raise HTTPException(502, "PubChem API 오류")
     props = resp.json().get("PropertyTable", {}).get("Properties", [])
     if not props:
-        raise HTTPException(404, f"'{name}'에 대한 결과가 없습니다")
+        raise HTTPException(404, f"'{query}'에 대한 결과가 없습니다")
     p = props[0]
+    smiles = pubchem_smiles(p)
     return {
         "cid":        p.get("CID"),
         "iupac_name": p.get("IUPACName"),
         "formula":    p.get("MolecularFormula"),
-        "smiles":     p.get("IsomericSMILES"),
+        "smiles":     smiles,
         "mw":         p.get("MolecularWeight"),
         "exact_mass": p.get("ExactMass"),
         "logp":       p.get("XLogP"),
