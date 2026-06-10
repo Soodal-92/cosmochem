@@ -3,11 +3,12 @@ CosmoChem API — Phase B
 동기 경로: 단일 분자 descriptor → 즉시 응답
 비동기 경로(Phase C): docking / QSAR batch → 작업 큐
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rdkit import Chem
 from rdkit.Chem import AllChem, Descriptors, Crippen, Lipinski, rdMolDescriptors
+from rdkit.Chem.Draw import rdMolDraw2D
 from urllib.parse import quote
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -297,6 +298,28 @@ def descriptor_payload(m: Chem.Mol):
         "heavy_atoms": m.GetNumHeavyAtoms(),
         "rings":       rdMolDescriptors.CalcNumRings(m),
     }
+
+
+@app.post("/structure/svg")
+def structure_svg(mol: MoleculeIn):
+    """SMILES -> RDKit 2D SVG depiction."""
+    smiles = mol.smiles.strip()
+    if not smiles:
+        raise HTTPException(400, "SMILES가 비어 있습니다")
+    m = Chem.MolFromSmiles(smiles)
+    if m is None:
+        raise HTTPException(400, "유효하지 않은 SMILES")
+
+    rdMolDescriptors.CalcMolFormula(m)
+    AllChem.Compute2DCoords(m)
+    drawer = rdMolDraw2D.MolDraw2DSVG(520, 260)
+    opts = drawer.drawOptions()
+    opts.clearBackground = False
+    opts.bondLineWidth = 1.4
+    drawer.DrawMolecule(m)
+    drawer.FinishDrawing()
+    svg = drawer.GetDrawingText()
+    return Response(content=svg, media_type="image/svg+xml")
 
 
 def clamp_score(v: float):

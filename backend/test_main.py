@@ -44,6 +44,13 @@ def test_analyze_missing_field():
     assert r.status_code == 422
 
 
+def test_structure_svg_valid():
+    r = client.post("/structure/svg", json={"smiles": NIACINAMIDE_SMILES})
+    assert r.status_code == 200
+    assert "image/svg+xml" in r.headers["content-type"]
+    assert "<svg" in r.text
+
+
 def test_generate_candidates_valid():
     r = client.post("/candidates/generate", json={
         "name": "ferulic acid",

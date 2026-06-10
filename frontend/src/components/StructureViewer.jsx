@@ -1,62 +1,74 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 
-function simplifySmiles(smi) {
-  return smi
-    .replace(/\[C@@H\]/g, 'C').replace(/\[C@H\]/g, 'C')
-    .replace(/\[C@@\]/g, 'C').replace(/\[C@\]/g, 'C')
-    .replace(/@@/g, '').replace(/@/g, '')
-    .replace(/\//g, '').replace(/\\/g, '');
-}
-
-export default function StructureViewer({ smiles }) {
-  const canvasRef = useRef(null);
-  const noteRef = useRef(null);
+export default function StructureViewer({ smiles, height = 260 }) {
+  const [rendered, setRendered] = useState({ smiles: '', src: '', state: 'idle' });
 
   useEffect(() => {
-    const cv = canvasRef.current;
-    const note = noteRef.current;
-    if (!cv || !smiles) return;
-
-    const ctx = cv.getContext('2d');
-    ctx.clearRect(0, 0, cv.width, cv.height);
-
-    if (typeof window.SmilesDrawer === 'undefined') {
-      ctx.fillStyle = '#8B96A6';
-      ctx.font = "13px 'JetBrains Mono', monospace";
-      ctx.textAlign = 'center';
-      ctx.fillText('구조 렌더러 미로드 (오프라인)', cv.width / 2, cv.height / 2);
-      return;
+    if (!smiles) {
+      return undefined;
     }
 
-    function makeDrawer() {
-      return new window.SmilesDrawer.Drawer({
-        width: 520, height: 260, bondThickness: 1.1,
-        atomVisualization: 'default', explicitHydrogens: false, terminalCarbons: false,
-        themes: { light: { C: '#141823', N: '#2952CC', O: '#C23A33', S: '#B5790C', BACKGROUND: '#00000000' } },
-      });
-    }
+    const controller = new AbortController();
+    let objectUrl = '';
 
-    window.SmilesDrawer.parse(smiles,
-      (tree) => { makeDrawer().draw(tree, cv, 'light', false); if (note) note.textContent = '2D depiction · SmilesDrawer'; },
-      () => {
-        const simple = simplifySmiles(smiles);
-        window.SmilesDrawer.parse(simple,
-          (tree) => { makeDrawer().draw(tree, cv, 'light', false); if (note) note.textContent = '2D depiction · SmilesDrawer (stereo simplified)'; },
-          () => {
-            ctx.clearRect(0, 0, cv.width, cv.height);
-            ctx.fillStyle = '#8B96A6'; ctx.font = "13px 'JetBrains Mono',monospace"; ctx.textAlign = 'center';
-            ctx.fillText('이 구조는 렌더링할 수 없습니다', cv.width / 2, cv.height / 2);
-            if (note) note.textContent = '';
-          });
+    fetch('/api/structure/svg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ smiles }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.detail || '구조 렌더링 실패');
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setRendered({ smiles, src: objectUrl, state: 'done' });
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setRendered({ smiles, src: '', state: 'error' });
       });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [smiles]);
+
+  const isCurrent = rendered.smiles === smiles;
+  const src = isCurrent ? rendered.src : '';
+  const state = !smiles ? 'idle' : isCurrent ? rendered.state : 'loading';
 
   return (
     <div style={{ position: 'relative' }}>
-      <canvas ref={canvasRef} width={520} height={260}
-        style={{ width: '100%', height: 'auto', display: 'block', background: 'var(--panel-2)', borderRadius: 10 }} />
-      <div ref={noteRef}
-        style={{ fontSize: 10, color: 'var(--faint)', fontFamily: "'JetBrains Mono', monospace", marginTop: 6, textAlign: 'right' }} />
+      <div style={{
+        width: '100%',
+        height,
+        display: 'grid',
+        placeItems: 'center',
+        background: 'var(--panel-2)',
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}>
+        {src ? (
+          <img
+            alt="2D molecular structure"
+            src={src}
+            style={{ maxWidth: '100%', maxHeight: '100%', display: 'block' }}
+          />
+        ) : (
+          <span style={{ fontSize: 12, color: 'var(--faint)', fontFamily: "'JetBrains Mono', monospace" }}>
+            {state === 'loading' ? '구조 렌더링 중...' : state === 'error' ? '구조를 렌더링할 수 없습니다' : 'SMILES를 입력하세요'}
+          </span>
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--faint)', fontFamily: "'JetBrains Mono', monospace", marginTop: 6, textAlign: 'right' }}>
+        2D depiction · RDKit
+      </div>
     </div>
   );
 }

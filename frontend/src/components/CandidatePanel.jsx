@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { generateCandidates } from '../api';
+import StructureViewer from './StructureViewer';
 
 const TARGETS = [
   ['brightening', '미백'],
@@ -144,6 +145,10 @@ export default function CandidatePanel() {
             <div style={cardB}>
               <div style={{ ...mono, fontSize: 11, color: 'var(--muted)', overflowWrap: 'anywhere', marginBottom: 14 }}>
                 {candidate.smiles}
+              </div>
+
+              <div style={{ marginBottom: 18 }}>
+                <StructureViewer smiles={candidate.smiles} height={210} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 18 }}>
