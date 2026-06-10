@@ -196,6 +196,14 @@ button.run:hover{filter:brightness(1.08)}
           </div>
           <div class="err" id="err"></div>
 
+          <div style="height:10px"></div>
+          <label class="lbl">PubChem 이름 검색</label>
+          <div class="smiles-row">
+            <input id="pcname" placeholder="예: niacinamide, kojic acid" spellcheck="false">
+            <button class="run" style="background:var(--good);min-width:48px" onclick="searchPubChem()">검색</button>
+          </div>
+          <div id="pcerr" style="font-family:var(--mono);font-size:11px;margin-top:6px;min-height:14px"></div>
+
           <div class="sub">자주 쓰는 원료</div>
           <div class="chips" id="presets"></div>
         </div>
@@ -246,7 +254,8 @@ button.run:hover{filter:brightness(1.08)}
 
       <div class="disclaimer" id="disc">
         <b>정확도 안내 &nbsp;</b> 분자식·정확질량·분자량·HBD/HBA·회전결합·고리수는 SMILES로부터 직접 계산되어 신뢰할 수 있습니다.
-        TPSA는 Ertl 방식의 근사이며, logP는 브라우저용 간이 추정입니다(정밀값은 RDKit 백엔드 연동 시 교체). 프리셋 원료에는 문헌값(lit.)을 함께 표기합니다.
+        TPSA·logP는 브라우저용 근사 추정값이며, <b>백엔드(localhost:8000)가 실행 중이면 RDKit 정밀값으로 자동 교체</b>됩니다.
+        PubChem 이름 검색으로 화합물명 → SMILES 변환이 가능합니다. 프리셋 원료에는 문헌값(lit.)을 함께 표기합니다.
         효능·임상 수치가 아니며 스크리닝·상대비교 용도입니다.
       </div>
     </div>
@@ -614,13 +623,16 @@ function gauge(name,unit,val,zones,scaleMin,scaleMax,litVal,estimate){
 }
 function zoneOf(v,zones){ for(const z of zones){ if(v>=z.from&&v<=z.to) return z.t; } return 'ink'; }
 
-function analyze(name){
+async function analyze(name){
   const errEl=document.getElementById('err'); errEl.textContent='';
   const smi=document.getElementById('smiles').value.trim();
   if(!smi){ errEl.textContent='SMILES를 입력하세요.'; return; }
   let mol,d;
   try{ mol=parseSmiles(smi); d=descriptors(mol); }
   catch(e){ errEl.textContent='파싱 오류: '+e.message; return; }
+  const be=await tryBackend(smi);
+  const precise=!!be;
+  if(be){ d.logp=be.logp; d.tpsa=be.tpsa; d.hbd=be.hbd; d.hba=be.hba; d.rot=be.rot_bonds; }
 
   // name + formula
   document.getElementById('cname').textContent = name|| '사용자 입력 구조';
@@ -644,9 +656,9 @@ function analyze(name){
   g.push(gauge('분자량 (MW)','피부투과 지표',+d.mw.toFixed(1),
     [{t:'good',from:0,to:400},{t:'warn',from:400,to:500},{t:'flag',from:500,to:600}],0,600, L?L.mw:null,false));
   g.push(gauge('logP','친유성',d.logp,
-    [{t:'flag',from:-3,to:0},{t:'warn',from:0,to:1},{t:'good',from:1,to:3},{t:'warn',from:3,to:5},{t:'flag',from:5,to:7}],-3,7, L?L.logp:null,true));
+    [{t:'flag',from:-3,to:0},{t:'warn',from:0,to:1},{t:'good',from:1,to:3},{t:'warn',from:3,to:5},{t:'flag',from:5,to:7}],-3,7, L?L.logp:null,!precise));
   g.push(gauge('TPSA','극성표면적 Å²',d.tpsa,
-    [{t:'good',from:0,to:60},{t:'warn',from:60,to:90},{t:'flag',from:90,to:160}],0,160, L?L.tpsa:null,true));
+    [{t:'good',from:0,to:60},{t:'warn',from:60,to:90},{t:'flag',from:90,to:160}],0,160, L?L.tpsa:null,!precise));
   g.push(gauge('HBD','Lipinski 공여',d.hbd,
     [{t:'good',from:0,to:2},{t:'warn',from:2,to:4},{t:'flag',from:4,to:8}],0,8, null,false));
   g.push(gauge('HBA','Lipinski 수용 (N+O)',d.hba,
@@ -711,6 +723,44 @@ function renderInterp(d){
       <div class="iblock"><div class="ih"><span class="badge ${d.hbd>4?'flag':d.hbd>2?'warn':'good'}">수소결합</span><span class="t">공여 ${d.hbd} · 수용 ${d.hba}</span></div>
         <p>${d.hbd>4?'수소결합 공여가 많아 각질층 지질 통과 저항이 큽니다 — 보습·표면 보호형으로 강점이 될 수 있습니다.':'수소결합 부담이 낮아 막 투과에 유리합니다.'}</p></div>
     </div>`;
+}
+
+/* ============================================================
+   BACKEND + PUBCHEM
+   ============================================================ */
+const BACKEND='http://localhost:8000';
+
+async function tryBackend(smiles){
+  try{
+    const r=await fetch(`${BACKEND}/analyze`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({smiles}),
+      signal:AbortSignal.timeout(2000)});
+    if(r.ok) return await r.json();
+  }catch(e){}
+  return null;
+}
+
+async function searchPubChem(){
+  const name=document.getElementById('pcname').value.trim();
+  const errEl=document.getElementById('pcerr');
+  errEl.textContent=''; errEl.style.color='var(--flag)';
+  if(!name){errEl.textContent='이름을 입력하세요.';return;}
+  errEl.textContent='검색 중…'; errEl.style.color='var(--muted)';
+  try{
+    const url=`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/`+
+      `${encodeURIComponent(name)}/property/IsomericSMILES,IUPACName/JSON`;
+    const resp=await fetch(url);
+    if(!resp.ok){errEl.textContent='PubChem에 없는 화합물입니다.';return;}
+    const data=await resp.json();
+    const p=data.PropertyTable.Properties[0];
+    document.getElementById('smiles').value=p.IsomericSMILES;
+    errEl.textContent=`CID ${p.CID} · ${p.IUPACName||''}`;
+    errEl.style.color='var(--good)';
+    lastLit=null;
+    [...document.getElementById('presets').children].forEach(c=>c.classList.remove('on'));
+    analyze(p.IUPACName||name);
+  }catch(e){errEl.textContent='검색 실패: '+e.message;}
 }
 
 /* init */
