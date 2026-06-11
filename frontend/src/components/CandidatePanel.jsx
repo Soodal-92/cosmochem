@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { generateCandidates, saveCandidate } from '../api';
 import StructureViewer from './StructureViewer';
+import SynthesisFlow from './SynthesisFlow';
 
 const TARGETS = [
   ['brightening', '미백'],
@@ -325,8 +326,19 @@ export default function CandidatePanel() {
                 ))}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                <SectionList title="합성 방향" items={candidate.synthesis} />
+              {/* 합성 경로 플로우차트 */}
+              {candidate.synthesis_steps?.length > 0 ? (
+                <div style={{ marginBottom: 16, background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 12 }}>SYNTHESIS ROUTE</div>
+                  <SynthesisFlow steps={candidate.synthesis_steps} />
+                </div>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <SectionList title="합성 방향" items={candidate.synthesis} />
+                </div>
+              )}
+
+              <div style={{ marginBottom: 16 }}>
                 <SectionList title="해석" items={candidate.rationale} />
               </div>
 

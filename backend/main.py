@@ -745,6 +745,96 @@ def synthesis_plan(kind: str, flags: Dict[str, bool]):
     ]
 
 
+def synthesis_steps(kind: str, flags: Dict[str, bool], desc: Dict[str, Any]) -> List[Dict[str, str]]:
+    steps: List[Dict[str, str]] = []
+    n = 1
+
+    steps.append({
+        "step": str(n), "type": "start",
+        "title": "출발물질 확인",
+        "detail": "순도 ≥ 95%, 안정성·공급 가능성 확인 후 합성 착수",
+    }); n += 1
+
+    if kind == "acetylated":
+        steps.append({
+            "step": str(n), "type": "reaction",
+            "title": "Acetylation",
+            "detail": "Ac₂O (2 eq.) 또는 AcCl, 피리딘 용매, 0 °C → RT, 2–4 h",
+        }); n += 1
+        steps.append({
+            "step": str(n), "type": "workup",
+            "title": "Workup",
+            "detail": "포화 NaHCO₃ 수세 → Na₂SO₄ 건조 → 감압 농축",
+        }); n += 1
+    elif kind == "methyl_ester":
+        steps.append({
+            "step": str(n), "type": "reaction",
+            "title": "Esterification",
+            "detail": "MeOH/H₂SO₄ (cat.) 환류 또는 DCC·DMAP coupling (0 °C → RT)",
+        }); n += 1
+        steps.append({
+            "step": str(n), "type": "workup",
+            "title": "Workup",
+            "detail": "중화(K₂CO₃ aq.) → EtOAc 추출 → 건조 → 농축",
+        }); n += 1
+    elif kind == "reference":
+        steps.append({
+            "step": str(n), "type": "reaction",
+            "title": "Benchmark 처리 없음",
+            "detail": "입력 물질 자체를 기준 후보로 설정 — 제형 compatibility 먼저 평가",
+        }); n += 1
+    elif flags.get("amide"):
+        steps.append({
+            "step": str(n), "type": "reaction",
+            "title": "치환기 변형 또는 염 형성",
+            "detail": "amide 골격 유지, N-alkylation 또는 산 염 형성으로 용해도 조절",
+        }); n += 1
+        steps.append({
+            "step": str(n), "type": "workup",
+            "title": "Workup",
+            "detail": "여과 또는 추출 후 건조 및 농축",
+        }); n += 1
+    else:
+        steps.append({
+            "step": str(n), "type": "reaction",
+            "title": "유도체화 반응",
+            "detail": "반응성 작용기 확인 후 보호기 전략 수립 → fragment 치환 또는 coupling",
+        }); n += 1
+        steps.append({
+            "step": str(n), "type": "workup",
+            "title": "Workup",
+            "detail": "수세, 건조, 감압 농축",
+        }); n += 1
+
+    # 정제
+    if desc.get("mw", 999) < 350:
+        steps.append({
+            "step": str(n), "type": "purification",
+            "title": "재결정",
+            "detail": "EtOH/H₂O 또는 EtOAc/헥산 계 — 저분자 극성 화합물에 유리",
+        }); n += 1
+    else:
+        steps.append({
+            "step": str(n), "type": "purification",
+            "title": "컬럼 크로마토그래피",
+            "detail": "SiO₂, EtOAc/Hex 구배 → 필요 시 역상 prep-HPLC",
+        }); n += 1
+
+    steps.append({
+        "step": str(n), "type": "analysis",
+        "title": "구조 확인",
+        "detail": "¹H / ¹³C NMR, HRMS (ESI) — 합성 완료 판단 기준",
+    }); n += 1
+
+    steps.append({
+        "step": str(n), "type": "end",
+        "title": "순도 확인",
+        "detail": "HPLC 순도 ≥ 95% 확인 후 다음 단계 진행",
+    })
+
+    return steps
+
+
 def make_candidate(label: str, smiles: str, target: str, kind: str, confidence: str):
     m = Chem.MolFromSmiles(smiles)
     if m is None:
@@ -764,6 +854,7 @@ def make_candidate(label: str, smiles: str, target: str, kind: str, confidence: 
             "점수는 실험 효능이 아니라 후보 우선순위화 지표입니다.",
         ],
         "synthesis": synthesis_plan(kind, flags),
+        "synthesis_steps": synthesis_steps(kind, flags, desc),
         "purification": purification_plan(desc),
         "analysis": analysis_plan(desc),
         "purification_plan": purification_plan_structured(flags, desc),
