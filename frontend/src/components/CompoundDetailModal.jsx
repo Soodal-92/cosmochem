@@ -20,17 +20,22 @@ function cellTier(key, value) {
 const TIER_COLOR = { good: 'var(--good)', warn: 'var(--warn)', flag: 'var(--flag)' };
 const TIER_LABEL = { good: '최적', warn: '허용', flag: '주의' };
 
-const DESCRIPTORS = [
-  { key: 'formula',     label: '분자식',      unit: '',       note: '' },
-  { key: 'mw',          label: '분자량 (MW)', unit: 'g/mol',  note: '≤300 최적 · ≤500 허용' },
-  { key: 'exact_mass',  label: '정확질량',    unit: 'Da',     note: '' },
-  { key: 'logp',        label: 'logP',        unit: '',       note: '1–3 최적 · 0–4 허용 (피부 투과)' },
-  { key: 'tpsa',        label: 'TPSA',        unit: 'Å²',     note: '≤60 최적 · ≤90 허용 (흡수)' },
-  { key: 'hbd',         label: 'HBD',         unit: '개',     note: 'H-결합 공여체 · ≤2 최적' },
-  { key: 'hba',         label: 'HBA',         unit: '개',     note: 'H-결합 수용체 · ≤5 최적' },
-  { key: 'rot_bonds',   label: '회전 결합',   unit: '개',     note: '≤5 최적 (유연성)' },
-  { key: 'heavy_atoms', label: '헤비 원자',   unit: '개',     note: '' },
-  { key: 'rings',       label: '고리 수',     unit: '개',     note: '' },
+// 색상 코딩 대상 핵심 지표 (카드 그리드)
+const KEY_METRICS = [
+  { key: 'mw',        label: '분자량',   unit: 'g/mol', sub: '≤ 300 최적 / ≤ 500 허용' },
+  { key: 'logp',      label: 'logP',    unit: '',      sub: '1–3 최적 / 0–4 허용' },
+  { key: 'tpsa',      label: 'TPSA',   unit: 'Å²',    sub: '≤ 60 최적 / ≤ 90 허용' },
+  { key: 'hbd',       label: 'HBD',    unit: '',      sub: 'H-결합 공여체 ≤ 2' },
+  { key: 'hba',       label: 'HBA',    unit: '',      sub: 'H-결합 수용체 ≤ 5' },
+  { key: 'rot_bonds', label: '회전결합', unit: '',     sub: '≤ 5 최적 (유연성)' },
+];
+
+// 나머지 기본 정보 (단순 리스트)
+const INFO_FIELDS = [
+  { key: 'formula',     label: '분자식',   unit: '' },
+  { key: 'exact_mass',  label: '정확질량', unit: 'Da' },
+  { key: 'heavy_atoms', label: '헤비 원자', unit: '개' },
+  { key: 'rings',       label: '고리 수',  unit: '개' },
 ];
 
 function lipinskiCheck(data) {
@@ -60,8 +65,11 @@ export default function CompoundDetailModal({ compound, onClose }) {
     if (key === 'formula') return val;
     if (key === 'exact_mass') return parseFloat(val).toFixed(4);
     if (['mw', 'tpsa', 'logp'].includes(key)) return parseFloat(val).toFixed(2);
-    return val;
+    return String(val);
   }
+
+  const TIER_BG  = { good: 'var(--good)', warn: 'var(--warn)', flag: 'var(--flag)' };
+  const TIER_KO  = { good: '최적', warn: '허용', flag: '주의' };
 
   return (
     /* 백드롭 */
@@ -145,38 +153,60 @@ export default function CompoundDetailModal({ compound, onClose }) {
             </div>
           </div>
 
-          {/* 기술자 테이블 */}
+          {/* 핵심 지표 카드 그리드 */}
           <div>
-            <div style={{ ...mono, fontSize: 10, color: 'var(--faint)', marginBottom: 10 }}>DESCRIPTORS</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {DESCRIPTORS.map(({ key, label, unit, note }) => {
+            <div style={{ ...mono, fontSize: 10, color: 'var(--faint)', marginBottom: 10 }}>KEY METRICS</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              {KEY_METRICS.map(({ key, label, unit, sub }) => {
                 const raw  = data?.[key];
                 const text = fmt(key, raw);
                 const tier = cellTier(key, raw);
-                const fg   = tier ? TIER_COLOR[tier] : 'var(--ink)';
+                const col  = tier ? TIER_BG[tier] : 'var(--muted)';
                 return (
                   <div key={key} style={{
-                    display: 'grid', gridTemplateColumns: '130px 100px auto',
-                    alignItems: 'center', gap: 12,
-                    padding: '9px 12px', borderRadius: 8,
-                    background: tier ? `${TIER_COLOR[tier]}0d` : 'transparent',
-                    border: `1px solid ${tier ? TIER_COLOR[tier] + '22' : 'var(--line-2)'}`,
+                    background: 'var(--panel-2)',
+                    border: `1px solid ${tier ? col + '55' : 'var(--line-2)'}`,
+                    borderTop: `3px solid ${col}`,
+                    borderRadius: 10, padding: '12px 14px',
                   }}>
-                    <span style={{ ...mono, fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{label}</span>
-                    <span style={{ ...mono, fontSize: 13, fontWeight: 700, color: fg }}>
-                      {text}{raw != null && unit ? <span style={{ fontSize: 10, color: 'var(--faint)', fontWeight: 400 }}> {unit}</span> : ''}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, color: 'var(--muted)' }}>{label}</span>
                       {tier && (
                         <span style={{
-                          ...mono, fontSize: 9, fontWeight: 700,
-                          color: TIER_COLOR[tier], background: `${TIER_COLOR[tier]}20`,
-                          border: `1px solid ${TIER_COLOR[tier]}55`,
-                          borderRadius: 999, padding: '1px 7px',
-                        }}>{TIER_LABEL[tier]}</span>
+                          ...mono, fontSize: 9, fontWeight: 700, color: col,
+                          background: `${col}1a`, border: `1px solid ${col}44`,
+                          borderRadius: 999, padding: '1px 6px',
+                        }}>{TIER_KO[tier]}</span>
                       )}
-                      {note && <span style={{ ...mono, fontSize: 10, color: 'var(--faint)' }}>{note}</span>}
                     </div>
+                    <div style={{ ...mono, fontSize: 22, fontWeight: 700, color: col, lineHeight: 1 }}>
+                      {text}
+                      {unit && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--faint)', marginLeft: 4 }}>{unit}</span>}
+                    </div>
+                    <div style={{ ...mono, fontSize: 10, color: 'var(--faint)', marginTop: 6 }}>{sub}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 기본 정보 */}
+          <div>
+            <div style={{ ...mono, fontSize: 10, color: 'var(--faint)', marginBottom: 10 }}>기본 정보</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {INFO_FIELDS.map(({ key, label, unit }) => {
+                const raw  = data?.[key];
+                const text = fmt(key, raw);
+                return (
+                  <div key={key} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: 'var(--panel-2)', border: '1px solid var(--line-2)',
+                    borderRadius: 8, padding: '9px 14px', gap: 12,
+                  }}>
+                    <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, color: 'var(--muted)' }}>{label}</span>
+                    <span style={{ ...mono, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+                      {text}{raw != null && unit ? <span style={{ fontSize: 10, color: 'var(--faint)', fontWeight: 400 }}> {unit}</span> : ''}
+                    </span>
                   </div>
                 );
               })}
