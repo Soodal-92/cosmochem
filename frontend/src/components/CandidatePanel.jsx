@@ -4,6 +4,8 @@ import StructureViewer from './StructureViewer';
 import SynthesisFlow from './SynthesisFlow';
 import { exportCandidatesCsv, printCandidatePdf } from '../utils/exportUtils';
 
+// ── 상수 ──────────────────────────────────────────────────────────────────────
+
 const TARGETS = [
   ['brightening', '미백'],
   ['antioxidant', '항산화'],
@@ -13,30 +15,22 @@ const TARGETS = [
 ];
 
 const PRESETS = [
-  ['niacinamide', 'O=C(N)c1cccnc1', '나이아신아마이드'],
-  ['ascorbic acid', 'OC[C@H](O)[C@H]1OC(=O)C(O)=C1O', '아스코르브산'],
-  ['ferulic acid', 'COc1cc(/C=C/C(=O)O)ccc1O', '페룰산'],
-  ['kojic acid', 'OCC1=CC(=O)C(O)=CO1', '코지산'],
-  ['resveratrol', 'OC1=CC(=CC(=C1)/C=C/c1ccc(O)cc1)O', '레스베라트롤'],
+  ['niacinamide',   'O=C(N)c1cccnc1',                           '나이아신아마이드'],
+  ['ascorbic acid', 'OC[C@H](O)[C@H]1OC(=O)C(O)=C1O',          '아스코르브산'],
+  ['ferulic acid',  'COc1cc(/C=C/C(=O)O)ccc1O',                 '페룰산'],
+  ['kojic acid',    'OCC1=CC(=O)C(O)=CO1',                      '코지산'],
+  ['resveratrol',   'OC1=CC(=CC(=C1)/C=C/c1ccc(O)cc1)O',        '레스베라트롤'],
 ];
 
-const card = { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', marginBottom: 16 };
-const cardH = { padding: '13px 16px', borderBottom: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 };
-const cardB = { padding: 18 };
-const label = { display: 'block', fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 6 };
-const input = { fontFamily: "'JetBrains Mono',monospace", fontSize: 13, background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '9px 10px', outline: 'none', color: 'var(--ink)', width: '100%' };
-const btn = (c = 'var(--accent)') => ({ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, color: '#fff', background: c, border: 'none', borderRadius: 9, padding: '9px 16px', cursor: 'pointer' });
-const mono = { fontFamily: "'JetBrains Mono',monospace" };
-
 const TYPE_META = {
-  phenolic:             { label: '페놀성',    color: '#22c55e' },
-  carboxylic_acid:      { label: '카르복실산', color: 'var(--accent)' },
-  ester:                { label: '에스터',    color: '#8b5cf6' },
-  amide:                { label: '아미드',    color: '#f59e0b' },
-  high_logP:            { label: '고지용성',  color: '#ef4444' },
-  high_TPSA:            { label: '고극성',    color: '#06b6d4' },
+  phenolic:             { label: '페놀성',     color: '#22c55e' },
+  carboxylic_acid:      { label: '카르복실산',  color: 'var(--accent)' },
+  ester:                { label: '에스터',     color: '#8b5cf6' },
+  amide:                { label: '아미드',     color: '#f59e0b' },
+  high_logP:            { label: '고지용성',   color: '#ef4444' },
+  high_TPSA:            { label: '고극성',     color: '#06b6d4' },
   inorganic_placeholder:{ label: '무기/미네랄', color: 'var(--muted)' },
-  general:              { label: '일반',      color: 'var(--faint)' },
+  general:              { label: '일반',       color: 'var(--faint)' },
 };
 
 const ANALYSIS_SECTIONS = [
@@ -47,323 +41,406 @@ const ANALYSIS_SECTIONS = [
   ['efficacy_screening',     '효능 스크리닝'],
 ];
 
-function Score({ label: scoreLabel, value }) {
-  const color = value >= 70 ? 'var(--good)' : value >= 45 ? 'var(--warn)' : 'var(--flag)';
-  return (
-    <div style={{ background: 'var(--panel-2)', borderRadius: 8, padding: '9px 10px' }}>
-      <div style={{ fontSize: 10, color: 'var(--faint)', marginBottom: 3 }}>{scoreLabel}</div>
-      <div style={{ ...mono, fontSize: 14, fontWeight: 700, color }}>{value}</div>
-    </div>
-  );
-}
+const KIND_KO = {
+  acetylated:  'Acetylation',
+  methyl_ester: 'Esterification',
+  reference:   'Reference',
+  default:     '유도체화',
+};
 
-function SectionList({ title, items }) {
-  return (
-    <div>
-      <div style={{ ...label, marginBottom: 5 }}>{title}</div>
-      <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
-        {items.map((item, i) => <li key={i}>{item}</li>)}
-      </ul>
-    </div>
-  );
-}
+const mono = { fontFamily: "'JetBrains Mono',monospace" };
+const lbl  = { display: 'block', ...mono, fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 5 };
+const inp  = { ...mono, fontSize: 13, background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '9px 10px', outline: 'none', color: 'var(--ink)', width: '100%', boxSizing: 'border-box' };
+const btnS = (bg = 'var(--accent)', fg = '#fff') => ({
+  fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13,
+  color: fg, background: bg, border: bg === 'var(--panel-2)' ? '1px solid var(--line)' : 'none',
+  borderRadius: 9, padding: '9px 16px', cursor: 'pointer',
+});
+
+// ── 작은 컴포넌트 ─────────────────────────────────────────────────────────────
 
 function TypeTag({ type }) {
-  const meta = TYPE_META[type] || { label: type, color: 'var(--faint)' };
+  const m = TYPE_META[type] || { label: type, color: 'var(--faint)' };
   return (
-    <span style={{
-      ...mono, fontSize: 10, fontWeight: 600,
-      color: meta.color,
-      background: `${meta.color}1a`,
-      border: `1px solid ${meta.color}44`,
-      borderRadius: 999, padding: '2px 8px',
-    }}>
-      {meta.label}
+    <span style={{ ...mono, fontSize: 10, fontWeight: 600, color: m.color, background: `${m.color}1a`, border: `1px solid ${m.color}44`, borderRadius: 999, padding: '2px 8px' }}>
+      {m.label}
     </span>
+  );
+}
+
+function ScoreChip({ label: sl, value }) {
+  const color = value >= 70 ? 'var(--good)' : value >= 45 ? 'var(--warn)' : 'var(--flag)';
+  return (
+    <div style={{ background: 'var(--panel-2)', border: `1px solid ${color}44`, borderTop: `3px solid ${color}`, borderRadius: 9, padding: '10px 12px', textAlign: 'center' }}>
+      <div style={{ fontSize: 10, color: 'var(--faint)', marginBottom: 4 }}>{sl}</div>
+      <div style={{ ...mono, fontSize: 18, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+}
+
+function DescChip({ label: dl, value, unit }) {
+  return (
+    <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 8, padding: '7px 10px', textAlign: 'center' }}>
+      <div style={{ fontSize: 10, color: 'var(--faint)', marginBottom: 3 }}>{dl}</div>
+      <div style={{ ...mono, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+        {value ?? '-'}
+        {unit && <span style={{ fontSize: 9, color: 'var(--faint)', marginLeft: 2 }}>{unit}</span>}
+      </div>
+    </div>
   );
 }
 
 function MethodItem({ method, reason, index }) {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-      <span style={{ ...mono, flexShrink: 0, fontSize: 10, color: 'var(--accent)', fontWeight: 700, marginTop: 3 }}>
+      <span style={{ ...mono, flexShrink: 0, fontSize: 10, color: 'var(--accent)', fontWeight: 700, marginTop: 2 }}>
         {index != null ? `${index}.` : '•'}
       </span>
       <div>
         <div style={{ fontSize: 12, color: 'var(--ink)', lineHeight: 1.55 }}>{method}</div>
-        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>
-          이유: {reason}
+        {reason && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>→ {reason}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Accordion({ title, accent = 'var(--accent)', children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ border: '1px solid var(--line-2)', borderRadius: 10, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '11px 14px', background: 'var(--panel-2)', border: 'none', cursor: 'pointer',
+          fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 12, color: accent,
+          textAlign: 'left',
+        }}
+      >
+        <span>{title}</span>
+        <span style={{ ...mono, fontSize: 12, color: 'var(--faint)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ background: 'var(--panel)', padding: '14px 14px' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 반응식 Scheme ─────────────────────────────────────────────────────────────
+
+function ReactionScheme({ inputSmiles, inputName, candidate }) {
+  const kind    = candidate.candidate_type;
+  const rxnName = KIND_KO[kind] || KIND_KO.default;
+
+  // synthesis_steps에서 첫 번째 reaction 스텝 상세
+  const rxnStep = candidate.synthesis_steps?.find(s => s.type === 'reaction');
+  const cond    = rxnStep?.detail ?? '';
+  const purStep = candidate.synthesis_steps?.find(s => s.type === 'purification');
+
+  return (
+    <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 12, padding: '18px 16px' }}>
+      <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 14 }}>REACTION SCHEME</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 1fr', gap: 8, alignItems: 'center' }}>
+        {/* 출발물질 */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ ...mono, fontSize: 10, color: 'var(--faint)', marginBottom: 6 }}>STARTING MATERIAL</div>
+          <div style={{ border: '1px solid var(--line-2)', borderRadius: 10, overflow: 'hidden', background: 'var(--panel)' }}>
+            <StructureViewer smiles={inputSmiles} height={180} />
+          </div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 700, marginTop: 8, color: 'var(--muted)' }}>
+            {inputName || 'Starting Material'}
+          </div>
+        </div>
+
+        {/* 반응 화살표 */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '0 4px' }}>
+          <div style={{ ...mono, fontSize: 11, fontWeight: 700, color: '#8b5cf6', textAlign: 'center', lineHeight: 1.4 }}>{rxnName}</div>
+          {/* 화살표 */}
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+            <div style={{ flex: 1, height: 2, background: 'var(--muted)' }} />
+            <div style={{ width: 0, height: 0, borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '10px solid var(--muted)' }} />
+          </div>
+          {cond && (
+            <div style={{ ...mono, fontSize: 9, color: 'var(--faint)', textAlign: 'center', lineHeight: 1.4, whiteSpace: 'pre-line' }}>
+              {cond.length > 55 ? cond.slice(0, 54) + '…' : cond}
+            </div>
+          )}
+        </div>
+
+        {/* 후보 물질 (Product) */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 6 }}>PRODUCT</div>
+          <div style={{ border: `2px solid var(--accent)`, borderRadius: 10, overflow: 'hidden', background: 'var(--panel)' }}>
+            <StructureViewer smiles={candidate.smiles} height={180} />
+          </div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 700, marginTop: 8, color: 'var(--accent)' }}>
+            {candidate.label}
+          </div>
+          {/* 물질 유형 태그 */}
+          {candidate.purification_plan?.compound_types?.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 4, marginTop: 6 }}>
+              {candidate.purification_plan.compound_types.map(t => <TypeTag key={t} type={t} />)}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 정제 요약 (inline) */}
+      {purStep && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--line-2)', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ ...mono, fontSize: 10, color: '#06b6d4', fontWeight: 600, flexShrink: 0 }}>정제</span>
+          <span style={{ ...mono, fontSize: 11, color: 'var(--muted)' }}>{purStep.title} — {purStep.detail}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-function PurificationCard({ plan }) {
-  if (!plan) return null;
-  const { compound_types = [], steps = [] } = plan;
-  return (
-    <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 10, padding: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-        <span style={{ ...label, margin: 0 }}>정제 방법</span>
-        {compound_types.map(t => <TypeTag key={t} type={t} />)}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {steps.map((step, i) => (
-          <MethodItem key={i} method={step.method} reason={step.reason} index={i + 1} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function AnalysisCard({ plan }) {
-  if (!plan) return null;
-  return (
-    <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 10, padding: 14 }}>
-      <div style={{ ...label, marginBottom: 12 }}>분석 방법</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {ANALYSIS_SECTIONS.map(([key, sectionLabel]) => {
-          const items = plan[key];
-          if (!items || items.length === 0) return null;
-          return (
-            <div key={key}>
-              <div style={{
-                fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 700,
-                color: 'var(--accent)', marginBottom: 8,
-                textTransform: 'uppercase', letterSpacing: '.07em',
-              }}>
-                ▸ {sectionLabel}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 6 }}>
-                {items.map((item, i) => (
-                  <MethodItem key={i} method={item.method} reason={item.reason} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 export default function CandidatePanel() {
-  const [target, setTarget] = useState('brightening');
-  const [name, setName] = useState('ferulic acid');
-  const [smiles, setSmiles] = useState('COc1cc(/C=C/C(=O)O)ccc1O');
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [target,       setTarget]       = useState('brightening');
+  const [name,         setName]         = useState('ferulic acid');
+  const [smiles,       setSmiles]       = useState('COc1cc(/C=C/C(=O)O)ccc1O');
+  const [result,       setResult]       = useState(null);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState('');
   const [savedIndices, setSavedIndices] = useState(new Set());
-  const [savingIndex, setSavingIndex] = useState(null);
-  const [saveError, setSaveError] = useState('');
+  const [savingIndex,  setSavingIndex]  = useState(null);
+  const [saveError,    setSaveError]    = useState('');
 
-  function selectPreset([, presetSmiles, labelText]) {
-    setName(labelText);
-    setSmiles(presetSmiles);
-  }
+  function selectPreset([, s, n]) { setSmiles(s); setName(n); }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError('');
-    setResult(null);
-    setSavedIndices(new Set());
-    setSaveError('');
-    setLoading(true);
-    try {
-      setResult(await generateCandidates({ smiles, name, target }));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    setError(''); setResult(null); setSavedIndices(new Set()); setSaveError(''); setLoading(true);
+    try { setResult(await generateCandidates({ smiles, name, target })); }
+    catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }
 
   async function handleSave(candidate, index) {
     if (savedIndices.has(index) || savingIndex === index) return;
-    setSavingIndex(index);
-    setSaveError('');
+    setSavingIndex(index); setSaveError('');
     try {
       await saveCandidate({
-        input_smiles:     result.input.smiles,
-        input_name:       result.input.name,
-        target:           result.input.target,
-        label:            candidate.label,
-        smiles:           candidate.smiles,
-        candidate_type:   candidate.candidate_type,
-        confidence:       candidate.confidence,
-        descriptors:      candidate.descriptors,
-        scores:           candidate.scores,
-        compound_types:   candidate.purification_plan?.compound_types ?? [],
-        synthesis:        candidate.synthesis,
+        input_smiles:      result.input.smiles,
+        input_name:        result.input.name,
+        target:            result.input.target,
+        label:             candidate.label,
+        smiles:            candidate.smiles,
+        candidate_type:    candidate.candidate_type,
+        confidence:        candidate.confidence,
+        descriptors:       candidate.descriptors,
+        scores:            candidate.scores,
+        compound_types:    candidate.purification_plan?.compound_types ?? [],
+        synthesis:         candidate.synthesis,
         purification_plan: candidate.purification_plan ?? null,
-        analysis_plan:    candidate.analysis_plan ?? null,
-        rationale:        candidate.rationale,
+        analysis_plan:     candidate.analysis_plan ?? null,
+        rationale:         candidate.rationale,
       });
       setSavedIndices(prev => new Set([...prev, index]));
-    } catch (err) {
-      setSaveError(err.message);
-    } finally {
-      setSavingIndex(null);
-    }
+    } catch (err) { setSaveError(err.message); }
+    finally { setSavingIndex(null); }
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 18, alignItems: 'start' }}>
-      <div style={card}>
-        <div style={cardH}>
-          <div>
-            <span style={{ ...mono, fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>DESIGN</span>
-            <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, margin: '2px 0 0' }}>후보물질 설계</h2>
-          </div>
+    <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 18, alignItems: 'start' }}>
+
+      {/* ── 입력 패널 ── */}
+      <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--line-2)' }}>
+          <span style={{ ...mono, fontSize: 11, color: 'var(--accent)', fontWeight: 700 }}>DESIGN INPUT</span>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, margin: '2px 0 0' }}>후보물질 설계</h2>
         </div>
-        <form onSubmit={handleSubmit} style={cardB}>
-          <label style={label}>목표 효능</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            {TARGETS.map(([id, text]) => (
-              <button key={id} type="button" onClick={() => setTarget(id)}
-                style={{ ...btn(target === id ? 'var(--accent)' : 'var(--panel-2)'), color: target === id ? '#fff' : 'var(--ink)', border: '1px solid var(--line)', fontSize: 12 }}>
-                {text}
-              </button>
-            ))}
+        <form onSubmit={handleSubmit} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <span style={lbl}>목표 효능</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+              {TARGETS.map(([id, text]) => (
+                <button key={id} type="button" onClick={() => setTarget(id)}
+                  style={{ ...btnS(target === id ? 'var(--accent)' : 'var(--panel-2)', target === id ? '#fff' : 'var(--ink)'), border: '1px solid var(--line)', fontSize: 12 }}>
+                  {text}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <label style={label}>출발 물질명</label>
-          <input style={{ ...input, marginBottom: 12 }} value={name} onChange={e => setName(e.target.value)} placeholder="예: ferulic acid" />
-
-          <label style={label}>출발 물질 SMILES</label>
-          <textarea style={{ ...input, minHeight: 88, resize: 'vertical', marginBottom: 12 }} value={smiles} onChange={e => setSmiles(e.target.value)} />
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
-            {PRESETS.map(p => (
-              <button key={p[0]} type="button" onClick={() => selectPreset(p)}
-                style={{ ...btn('var(--panel-2)'), color: 'var(--ink)', border: '1px solid var(--line)', fontSize: 12, padding: '6px 10px' }}>
-                {p[2]}
-              </button>
-            ))}
+          <div>
+            <label style={lbl}>출발 물질명</label>
+            <input style={inp} value={name} onChange={e => setName(e.target.value)} placeholder="예: ferulic acid" />
           </div>
 
-          <button type="submit" disabled={loading || !smiles.trim()} style={{ ...btn(), width: '100%', opacity: loading ? 0.65 : 1 }}>
+          <div>
+            <label style={lbl}>출발 물질 SMILES</label>
+            <textarea style={{ ...inp, minHeight: 80, resize: 'vertical' }} value={smiles} onChange={e => setSmiles(e.target.value)} />
+          </div>
+
+          <div>
+            <span style={lbl}>프리셋</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {PRESETS.map(p => (
+                <button key={p[0]} type="button" onClick={() => selectPreset(p)}
+                  style={{ ...btnS('var(--panel-2)', 'var(--ink)'), border: '1px solid var(--line)', fontSize: 11, padding: '5px 10px' }}>
+                  {p[2]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" disabled={loading || !smiles.trim()} style={{ ...btnS(), width: '100%', opacity: loading ? 0.65 : 1 }}>
             {loading ? '설계 중...' : '후보 생성'}
           </button>
-          {error && <div style={{ marginTop: 12, color: 'var(--flag)', fontSize: 12 }}>{error}</div>}
+          {error && <div style={{ color: 'var(--flag)', fontSize: 12, marginTop: 4 }}>{error}</div>}
         </form>
       </div>
 
-      <div>
+      {/* ── 결과 패널 ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* 플레이스홀더 */}
         {!result && (
-          <div style={card}>
-            <div style={cardH}>
-              <div>
-                <span style={{ ...mono, fontSize: 11, color: 'var(--good)', fontWeight: 700 }}>OUTPUT</span>
-                <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, margin: '2px 0 0' }}>설계 결과</h2>
-              </div>
-            </div>
-            <div style={{ padding: 36, color: 'var(--faint)', textAlign: 'center', fontSize: 13 }}>
-              출발 물질과 목표 효능을 선택해 후보 물질, 합성 방향, 정제/분석 초안을 생성하세요.
-            </div>
+          <div style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, padding: 40, textAlign: 'center', color: 'var(--faint)', ...mono, fontSize: 12, lineHeight: 1.8 }}>
+            출발 물질과 목표 효능을 선택해<br />후보 물질 반응식과 합성 계획을 생성하세요
           </div>
         )}
 
+        {/* 저장 오류 */}
         {saveError && (
           <div style={{ marginBottom: 12, background: 'var(--flag-soft)', border: '1px solid var(--flag)', borderRadius: 10, padding: '8px 14px', fontSize: 12, color: 'var(--flag)' }}>
             저장 오류: {saveError}
           </div>
         )}
 
+        {/* 내보내기 버튼 */}
         {result?.candidates?.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => exportCandidatesCsv(result.candidates.map(c => ({ ...c, target: result.input.target })))}
-              style={{ ...mono, fontSize: 11, color: 'var(--good)', background: 'transparent', border: '1px solid var(--good)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-            >CSV 내보내기</button>
-            <button
-              onClick={() => printCandidatePdf(result.candidates.map(c => ({ ...c, target: result.input.target })))}
-              style={{ ...mono, fontSize: 11, color: 'var(--accent)', background: 'transparent', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-            >PDF 인쇄</button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, justifyContent: 'flex-end' }}>
+            <button onClick={() => exportCandidatesCsv(result.candidates.map(c => ({ ...c, target: result.input.target })))}
+              style={{ ...mono, fontSize: 11, color: 'var(--good)', background: 'transparent', border: '1px solid var(--good)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
+              CSV 내보내기
+            </button>
+            <button onClick={() => printCandidatePdf(result.candidates.map(c => ({ ...c, target: result.input.target })))}
+              style={{ ...mono, fontSize: 11, color: 'var(--accent)', background: 'transparent', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}>
+              PDF 인쇄
+            </button>
           </div>
         )}
 
-        {result?.candidates?.map((candidate, index) => (
-          <article key={`${candidate.label}-${candidate.smiles}-${index}`} style={card}>
-            <div style={cardH}>
-              <div>
-                <span style={{ ...mono, fontSize: 11, color: index === 0 ? 'var(--muted)' : 'var(--accent)', fontWeight: 700 }}>
-                  {candidate.candidate_type.toUpperCase()}
-                </span>
-                <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, margin: '2px 0 0' }}>{candidate.label}</h2>
-              </div>
+        {/* 후보 카드들 */}
+        {result?.candidates?.map((c, index) => (
+          <article key={`${c.label}-${index}`} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 14, overflow: 'hidden', marginBottom: 20 }}>
+
+            {/* 카드 헤더 */}
+            <div style={{ padding: '13px 18px', borderBottom: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...mono, fontSize: 11, color: 'var(--faint)' }}>confidence {candidate.confidence}</span>
-                <button
-                  onClick={() => handleSave(candidate, index)}
-                  disabled={savedIndices.has(index) || savingIndex === index}
-                  style={{
-                    ...btn(savedIndices.has(index) ? 'var(--good)' : 'var(--accent)'),
-                    fontSize: 11, padding: '5px 12px',
-                    opacity: savingIndex === index ? 0.6 : 1,
-                  }}
-                >
-                  {savedIndices.has(index) ? '✓ 저장됨' : savingIndex === index ? '저장 중…' : '저장'}
-                </button>
+                <span style={{ ...mono, fontSize: 11, fontWeight: 700, color: index === 0 ? '#8b5cf6' : 'var(--accent)' }}>
+                  {(KIND_KO[c.candidate_type] || c.candidate_type).toUpperCase()}
+                </span>
+                <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700, margin: 0 }}>{c.label}</h2>
+                <span style={{ ...mono, fontSize: 10, color: 'var(--faint)', background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 999, padding: '2px 8px' }}>
+                  confidence {c.confidence}
+                </span>
               </div>
+              <button
+                onClick={() => handleSave(c, index)}
+                disabled={savedIndices.has(index) || savingIndex === index}
+                style={{
+                  ...mono, fontSize: 11, fontWeight: 700, flexShrink: 0,
+                  color: savedIndices.has(index) ? 'var(--good)' : '#fff',
+                  background: savedIndices.has(index) ? 'transparent' : 'var(--accent)',
+                  border: savedIndices.has(index) ? '1px solid var(--good)' : 'none',
+                  borderRadius: 9, padding: '7px 14px', cursor: 'pointer',
+                  opacity: savingIndex === index ? 0.6 : 1,
+                }}
+              >
+                {savedIndices.has(index) ? '✓ 저장됨' : savingIndex === index ? '저장 중…' : '저장'}
+              </button>
             </div>
-            <div style={cardB}>
-              <div style={{ ...mono, fontSize: 11, color: 'var(--muted)', overflowWrap: 'anywhere', marginBottom: 14 }}>
-                {candidate.smiles}
+
+            <div style={{ padding: '18px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+              {/* ① 반응식 Scheme */}
+              <ReactionScheme
+                inputSmiles={result.input.smiles}
+                inputName={result.input.name}
+                candidate={c}
+              />
+
+              {/* ② 점수 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                <ScoreChip label="목표 효능"   value={c.scores.target} />
+                <ScoreChip label="피부 투과"   value={c.scores.skin_permeation} />
+                <ScoreChip label="제형 적합"   value={c.scores.formulation_fit} />
+                <ScoreChip label="합성 접근성" value={c.scores.synthetic_access} />
               </div>
 
-              <div style={{ marginBottom: 18 }}>
-                <StructureViewer smiles={candidate.smiles} height={210} />
+              {/* ③ 기술자 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                <DescChip label="MW"      value={c.descriptors.mw?.toFixed(1)}  unit="g/mol" />
+                <DescChip label="logP"    value={c.descriptors.logp?.toFixed(2)} />
+                <DescChip label="TPSA"    value={c.descriptors.tpsa?.toFixed(1)} unit="Å²" />
+                <DescChip label="HBD/HBA" value={`${c.descriptors.hbd}/${c.descriptors.hba}`} />
+                <DescChip label="rot"     value={c.descriptors.rot_bonds} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 18 }}>
-                <Score label="목표 효능" value={candidate.scores.target} />
-                <Score label="피부 투과" value={candidate.scores.skin_permeation} />
-                <Score label="제형 적합" value={candidate.scores.formulation_fit} />
-                <Score label="합성 접근성" value={candidate.scores.synthetic_access} />
-              </div>
+              {/* ④ 합성 경로 (accordion) */}
+              <Accordion title="⚗ SYNTHESIS ROUTE" accent="#8b5cf6">
+                {c.synthesis_steps?.length > 0
+                  ? <SynthesisFlow steps={c.synthesis_steps} />
+                  : <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
+                      {c.synthesis?.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                }
+              </Accordion>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 18 }}>
-                {[
-                  ['MW', candidate.descriptors.mw],
-                  ['logP', candidate.descriptors.logp],
-                  ['TPSA', candidate.descriptors.tpsa],
-                  ['HBD/HBA', `${candidate.descriptors.hbd}/${candidate.descriptors.hba}`],
-                  ['rot', candidate.descriptors.rot_bonds],
-                ].map(([k, v]) => (
-                  <div key={k} style={{ background: 'var(--panel-2)', borderRadius: 8, padding: '8px 9px' }}>
-                    <div style={{ fontSize: 10, color: 'var(--faint)' }}>{k}</div>
-                    <div style={{ ...mono, fontSize: 12, fontWeight: 700 }}>{v}</div>
-                  </div>
-                ))}
-              </div>
+              {/* ⑤ 정제 계획 (accordion) */}
+              <Accordion title="◈ 정제 계획" accent="#06b6d4">
+                {c.purification_plan?.steps?.length > 0
+                  ? <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {c.purification_plan.steps.map((step, i) => (
+                        <MethodItem key={i} index={i + 1} method={step.method} reason={step.reason} />
+                      ))}
+                    </div>
+                  : <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
+                      {c.purification?.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                }
+              </Accordion>
 
-              {/* 합성 경로 플로우차트 */}
-              {candidate.synthesis_steps?.length > 0 ? (
-                <div style={{ marginBottom: 16, background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 12, padding: '14px 16px' }}>
-                  <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginBottom: 12 }}>SYNTHESIS ROUTE</div>
-                  <SynthesisFlow steps={candidate.synthesis_steps} />
-                </div>
-              ) : (
-                <div style={{ marginBottom: 16 }}>
-                  <SectionList title="합성 방향" items={candidate.synthesis} />
-                </div>
-              )}
+              {/* ⑥ 분석 계획 (accordion) */}
+              <Accordion title="⊙ 분석 계획" accent="var(--good)">
+                {c.analysis_plan
+                  ? <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {ANALYSIS_SECTIONS.map(([key, sectionLabel]) => {
+                        const items = c.analysis_plan[key];
+                        if (!items?.length) return null;
+                        return (
+                          <div key={key}>
+                            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 700, color: 'var(--good)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.07em' }}>
+                              ▸ {sectionLabel}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingLeft: 6 }}>
+                              {items.map((item, i) => <MethodItem key={i} method={item.method} reason={item.reason} />)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  : <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12 }}>
+                      {c.analysis?.map((s, i) => <li key={i}>{s}</li>)}
+                    </ul>
+                }
+              </Accordion>
 
-              <div style={{ marginBottom: 16 }}>
-                <SectionList title="해석" items={candidate.rationale} />
-              </div>
-
-              {candidate.purification_plan
-                ? <div style={{ marginBottom: 14 }}><PurificationCard plan={candidate.purification_plan} /></div>
-                : <div style={{ marginBottom: 14 }}><SectionList title="정제 방법" items={candidate.purification} /></div>
-              }
-              {candidate.analysis_plan
-                ? <AnalysisCard plan={candidate.analysis_plan} />
-                : <SectionList title="분석 방법" items={candidate.analysis} />
-              }
+              {/* ⑦ 해석 (accordion) */}
+              <Accordion title="◎ 설계 근거 (Rationale)">
+                <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--muted)', fontSize: 12, lineHeight: 1.7 }}>
+                  {c.rationale?.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </Accordion>
             </div>
           </article>
         ))}

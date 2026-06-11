@@ -355,10 +355,11 @@ def structure_svg(mol: MoleculeIn):
 
     rdMolDescriptors.CalcMolFormula(m)
     AllChem.Compute2DCoords(m)
-    drawer = rdMolDraw2D.MolDraw2DSVG(520, 260)
+    drawer = rdMolDraw2D.MolDraw2DSVG(520, 280)
     opts = drawer.drawOptions()
     opts.clearBackground = False
     opts.bondLineWidth = 1.4
+    opts.padding = 0.15
     drawer.DrawMolecule(m)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
@@ -1019,41 +1020,44 @@ async def delete_candidate(record_id: str):
 @app.get("/similar")
 async def find_similar(
     smiles: str = Query(...),
-    threshold: int = Query(75, ge=50, le=99),
+    threshold: int = Query(70, ge=50, le=99),
     max_records: int = Query(6, ge=1, le=10),
 ):
     query_mol = Chem.MolFromSmiles(smiles)
     if not query_mol:
         raise HTTPException(400, "유효하지 않은 SMILES")
-    query_fp = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, 2048)
+    canonical = Chem.MolToSmiles(query_mol, canonical=True)
+    query_fp  = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, 2048)
 
-    # PubChem 2D fastsimilarity → CID 목록
-    try:
-        r = await httpx.AsyncClient(timeout=25).post(
-            "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/cids/JSON",
-            data={"smiles": smiles, "Threshold": threshold, "MaxRecords": max_records + 6},
-        )
-    except Exception as exc:
-        raise HTTPException(502, f"PubChem 요청 실패: {exc}")
+    # PubChem 2D fastsimilarity → CID 목록 (POST with form data)
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            r = await client.post(
+                "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/cids/JSON",
+                data={"smiles": canonical, "Threshold": str(threshold), "MaxRecords": str(max_records + 8)},
+            )
+        except Exception as exc:
+            raise HTTPException(502, f"PubChem 요청 실패: {exc}")
 
-    if r.status_code == 404:
-        return []
-    if not r.is_success:
-        raise HTTPException(502, "PubChem 유사도 검색 오류")
+        if r.status_code == 404:
+            return []
+        if not r.is_success:
+            raise HTTPException(502, f"PubChem 유사도 검색 오류 ({r.status_code})")
 
-    cids = r.json().get("IdentifierList", {}).get("CID", [])
-    if not cids:
-        return []
+        cids = r.json().get("IdentifierList", {}).get("CID", [])
+        if not cids:
+            return []
 
-    # CID → SMILES + 이름 + 기본 속성
-    cid_str = ",".join(str(c) for c in cids[: max_records + 6])
-    try:
-        pr = await httpx.AsyncClient(timeout=15).get(
-            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_str}"
-            "/property/IUPACName,IsomericSMILES,MolecularFormula,MolecularWeight/JSON"
-        )
-    except Exception as exc:
-        raise HTTPException(502, f"PubChem 속성 조회 실패: {exc}")
+        # CID → SMILES + 이름 + 기본 속성
+        cid_str = ",".join(str(c) for c in cids[: max_records + 8])
+        try:
+            pr = await client.get(
+                f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_str}"
+                "/property/IUPACName,IsomericSMILES,MolecularFormula,MolecularWeight/JSON",
+                timeout=20,
+            )
+        except Exception as exc:
+            raise HTTPException(502, f"PubChem 속성 조회 실패: {exc}")
 
     props = pr.json().get("PropertyTable", {}).get("Properties", []) if pr.is_success else []
 
@@ -1067,7 +1071,7 @@ async def find_similar(
             continue
         fp  = AllChem.GetMorganFingerprintAsBitVect(mol, 2, 2048)
         sim = DataStructs.TanimotoSimilarity(query_fp, fp)
-        if sim >= 1.0:          # 자기 자신 제외
+        if sim >= 1.0:      # 자기 자신 제외
             continue
         results.append({
             "cid":        p.get("CID"),
