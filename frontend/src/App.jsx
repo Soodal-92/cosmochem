@@ -1,35 +1,41 @@
 import { useState } from 'react';
 import InputPanel from './components/InputPanel';
+import ComparisonSheet from './components/ComparisonSheet';
 import CandidatePanel from './components/CandidatePanel';
-import DescriptorPanel from './components/DescriptorPanel';
 import DOEPanel from './components/DOEPanel';
 import HistoryPanel from './components/HistoryPanel';
 import { analyzeSmiles } from './api';
 
 export default function App() {
-  const [result, setResult] = useState(null);
-  const [smiles, setSmiles] = useState('');
-  const [compoundName, setCompoundName] = useState('');
+  const [comparisonList, setComparisonList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isEstimate, setIsEstimate] = useState(false);
   const [tab, setTab] = useState('analyze');
 
   async function handleAnalyze(smi, name) {
     setLoading(true);
     setError('');
-    setSmiles(smi);
-    setCompoundName(name);
     try {
       const data = await analyzeSmiles(smi);
-      setResult(data);
-      setIsEstimate(false);
+      setComparisonList(prev => {
+        const idx = prev.findIndex(c => c.smiles === smi);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], name, data };
+          return next;
+        }
+        const id = `${smi}-${Date.now()}`;
+        return [...prev, { id, name, smiles: smi, data }].slice(0, 6);
+      });
     } catch (err) {
       setError(err.message);
-      setResult(null);
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleRemove(id) {
+    setComparisonList(prev => prev.filter(c => c.id !== id));
   }
 
   return (
@@ -80,17 +86,21 @@ export default function App() {
                 </div>
               )}
             </div>
-            <DescriptorPanel result={result} smiles={smiles} compoundName={compoundName} isEstimate={isEstimate} />
-          </div>
-        )}
-        {tab === 'doe' && (
-          <div style={{ paddingTop: 18, maxWidth: 900 }}>
-            <DOEPanel />
+            <ComparisonSheet
+              compounds={comparisonList}
+              onRemove={handleRemove}
+              onClear={() => setComparisonList([])}
+            />
           </div>
         )}
         {tab === 'candidate' && (
           <div style={{ paddingTop: 18 }}>
             <CandidatePanel />
+          </div>
+        )}
+        {tab === 'doe' && (
+          <div style={{ paddingTop: 18, maxWidth: 900 }}>
+            <DOEPanel />
           </div>
         )}
         {tab === 'history' && (

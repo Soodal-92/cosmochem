@@ -38,3 +38,8 @@ on public.candidates for select to anon using (true);
 
 create policy "Allow anonymous candidate inserts"
 on public.candidates for insert to anon with check (true);
+
+drop policy if exists "Allow anonymous candidate deletes" on public.candidates;
+
+create policy "Allow anonymous candidate deletes"
+on public.candidates for delete to anon using (true);

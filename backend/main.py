@@ -124,6 +124,8 @@ async def supabase_request(method: str, table: str, *, payload: Optional[Dict[st
             pass
         raise HTTPException(resp.status_code, detail)
 
+    if resp.status_code == 204 or not resp.text:
+        return []
     return resp.json()
 
 
@@ -899,6 +901,24 @@ async def save_candidate(req: CandidateSaveIn):
 @app.get("/candidates")
 async def list_candidates():
     return await supabase_request("GET", "candidates", query="?select=*&order=created_at.desc&limit=30")
+
+
+@app.delete("/compounds/{record_id}")
+async def delete_compound(record_id: str):
+    await supabase_request("DELETE", "compounds", query=f"?id=eq.{record_id}")
+    return {"deleted": record_id}
+
+
+@app.delete("/doe-experiments/{record_id}")
+async def delete_doe_experiment(record_id: str):
+    await supabase_request("DELETE", "doe_experiments", query=f"?id=eq.{record_id}")
+    return {"deleted": record_id}
+
+
+@app.delete("/candidates/{record_id}")
+async def delete_candidate(record_id: str):
+    await supabase_request("DELETE", "candidates", query=f"?id=eq.{record_id}")
+    return {"deleted": record_id}
 
 
 # ---- 비동기 경로(Phase C): 작업 큐에 등록하고 job_id 반환 ----

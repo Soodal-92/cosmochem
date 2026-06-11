@@ -34,3 +34,18 @@ on public.doe_experiments
 for insert
 to anon
 with check (true);
+
+drop policy if exists "Allow anonymous compound deletes"     on public.compounds;
+drop policy if exists "Allow anonymous DOE deletes"          on public.doe_experiments;
+
+create policy "Allow anonymous compound deletes"
+on public.compounds
+for delete
+to anon
+using (true);
+
+create policy "Allow anonymous DOE deletes"
+on public.doe_experiments
+for delete
+to anon
+using (true);

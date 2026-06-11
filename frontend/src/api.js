@@ -102,3 +102,21 @@ export async function listCandidates() {
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '후보 목록 조회 실패'); }
   return r.json();
 }
+
+export async function deleteCompound(id) {
+  const r = await fetch(`${BASE}/compounds/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '삭제 실패'); }
+  return r.json();
+}
+
+export async function deleteDoeExperiment(id) {
+  const r = await fetch(`${BASE}/doe-experiments/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '삭제 실패'); }
+  return r.json();
+}
+
+export async function deleteCandidate(id) {
+  const r = await fetch(`${BASE}/candidates/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '삭제 실패'); }
+  return r.json();
+}
