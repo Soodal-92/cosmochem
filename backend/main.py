@@ -3,6 +3,7 @@ CosmoChem API — Phase B
 동기 경로: 단일 분자 descriptor → 즉시 응답
 비동기 경로(Phase C): docking / QSAR batch → 작업 큐
 """
+import re
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -1126,20 +1127,33 @@ async def list_candidates():
     return await supabase_request("GET", "candidates", query="?select=*&order=created_at.desc&limit=30")
 
 
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
+)
+
+def _validate_uuid(record_id: str) -> str:
+    if not _UUID_RE.match(record_id):
+        raise HTTPException(400, "유효하지 않은 ID 형식")
+    return record_id
+
+
 @app.delete("/compounds/{record_id}")
 async def delete_compound(record_id: str):
+    _validate_uuid(record_id)
     await supabase_request("DELETE", "compounds", query=f"?id=eq.{record_id}")
     return {"deleted": record_id}
 
 
 @app.delete("/doe-experiments/{record_id}")
 async def delete_doe_experiment(record_id: str):
+    _validate_uuid(record_id)
     await supabase_request("DELETE", "doe_experiments", query=f"?id=eq.{record_id}")
     return {"deleted": record_id}
 
 
 @app.delete("/candidates/{record_id}")
 async def delete_candidate(record_id: str):
+    _validate_uuid(record_id)
     await supabase_request("DELETE", "candidates", query=f"?id=eq.{record_id}")
     return {"deleted": record_id}
 
@@ -1202,7 +1216,7 @@ async def find_similar(
 
     results = []
     for p in props:
-        smi = p.get("IsomericSMILES", "")
+        smi = pubchem_smiles(p)   # handles IsomericSMILES / CanonicalSMILES / ConnectivitySMILES fallback
         if not smi:
             continue
         mol = Chem.MolFromSmiles(smi)
@@ -1314,11 +1328,10 @@ def _run_docking_job(job_id: str, smiles: str, target_key: str):
             vina_available = False
 
         if vina_available:
-            # ── 실제 Vina 도킹 (설치된 경우) ──
-            # meeko로 PDBQT 준비 → Vina.dock() → 결과 파싱
-            # (구현 확장 포인트)
+            # TODO: implement real Vina docking (meeko PDBQT prep → Vina.dock() → parse scores)
+            # Until then, falls through to descriptor-based simulation even when vina is installed.
             affinity = _sim_docking_score(mol, target_key)
-            mode = "vina"
+            mode = "simulation"   # keep "simulation" until real Vina.dock() is wired up
         else:
             affinity = _sim_docking_score(mol, target_key)
             mode = "simulation"

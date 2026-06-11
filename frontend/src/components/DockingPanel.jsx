@@ -73,7 +73,10 @@ export default function DockingPanel({ compounds = [] }) {
     listDockingTargets()
       .then(data => { setTargets(data); if (data.length) setSelectedKey(data[0].key); })
       .catch(() => {});
-    return () => Object.values(pollRef.current).forEach(clearInterval);
+    // pollRef.current is mutated (never replaced), so capturing the ref value here
+    // gives a stable reference to the same object at cleanup time.
+    const polls = pollRef.current;
+    return () => Object.values(polls).forEach(clearInterval);
   }, []);
 
   function startPolling(jobId) {

@@ -17,9 +17,6 @@ function cellTier(key, value) {
   }
 }
 
-const TIER_COLOR = { good: 'var(--good)', warn: 'var(--warn)', flag: 'var(--flag)' };
-const TIER_LABEL = { good: '최적', warn: '허용', flag: '주의' };
-
 // 색상 코딩 대상 핵심 지표 (카드 그리드)
 const KEY_METRICS = [
   { key: 'mw',        label: '분자량',   unit: 'g/mol', sub: '≤ 300 최적 / ≤ 500 허용' },
