@@ -750,91 +750,218 @@ def synthesis_plan(kind: str, flags: Dict[str, bool]):
     ]
 
 
-def synthesis_steps(kind: str, flags: Dict[str, bool], desc: Dict[str, Any]) -> List[Dict[str, str]]:
-    steps: List[Dict[str, str]] = []
+def synthesis_steps(kind: str, flags: Dict[str, bool], desc: Dict[str, Any]) -> List[Dict]:
+    """Each step: step, type, title, detail + optional reagents/catalyst/solvent/temperature/time/conditions."""
+    steps: List[Dict] = []
     n = 1
+    mw   = desc.get("mw", 500)
+    logp = desc.get("logp", 2)
+    tpsa = desc.get("tpsa", 60)
 
     steps.append({
         "step": str(n), "type": "start",
         "title": "출발물질 확인",
         "detail": "순도 ≥ 95%, 안정성·공급 가능성 확인 후 합성 착수",
+        "reagents": [], "catalyst": [], "solvent": [], "temperature": "", "time": "",
     }); n += 1
 
     if kind == "acetylated":
         steps.append({
             "step": str(n), "type": "reaction",
-            "title": "Acetylation",
-            "detail": "Ac₂O (2 eq.) 또는 AcCl, 피리딘 용매, 0 °C → RT, 2–4 h",
+            "title": "O-Acetylation",
+            "detail": "Phenolic 또는 지방족 OH의 아세틸화 — 지용성·안정성 향상",
+            "reagents": [
+                "Acetic anhydride (Ac₂O) 1.5 eq.",
+                "또는 Acetyl chloride (AcCl) 1.2 eq.",
+            ],
+            "catalyst": [
+                "DMAP 0.1 eq. (선택적 O-아세틸화 촉진, 선택사항)",
+                "Pyridine (염기 겸 용매로 사용 시 별도 촉매 불필요)",
+            ],
+            "solvent": [
+                "Pyridine (염기 겸 용매, 가장 일반적)",
+                "또는 DCM + Et₃N 2.0 eq.",
+                "또는 THF + Et₃N 2.0 eq.",
+            ],
+            "temperature": "0 °C (적가) → RT (반응)",
+            "time": "2–4 h",
         }); n += 1
         steps.append({
             "step": str(n), "type": "workup",
             "title": "Workup",
-            "detail": "포화 NaHCO₃ 수세 → Na₂SO₄ 건조 → 감압 농축",
+            "detail": "과잉 아세틸화 시약 제거 및 생성물 분리",
+            "reagents": [
+                "포화 NaHCO₃ aq. 2× (산 중화 및 pyridine 제거)",
+                "포화 NaCl aq. 1× (염석)",
+                "Na₂SO₄ 또는 MgSO₄ (건조제)",
+            ],
+            "catalyst": [],
+            "solvent": ["EtOAc (추출 용매)"],
+            "temperature": "RT",
+            "time": "30–60 min",
         }); n += 1
+
     elif kind == "methyl_ester":
         steps.append({
             "step": str(n), "type": "reaction",
-            "title": "Esterification",
-            "detail": "MeOH/H₂SO₄ (cat.) 환류 또는 DCC·DMAP coupling (0 °C → RT)",
+            "title": "Esterification (COOH → COOMe)",
+            "detail": "카르복실산을 메틸 에스터로 전환 — 지용성·피부 투과성 개선",
+            "reagents": [
+                "Option A (Fischer): MeOH 10 eq. (과잉)",
+                "Option B (DCC): DCC 1.1 eq. + MeOH 1.5 eq.",
+            ],
+            "catalyst": [
+                "Option A: H₂SO₄ (conc.) 2–5 mol% (산 촉매)",
+                "Option B: DMAP 0.1 eq. (acyl transfer 촉진)",
+            ],
+            "solvent": [
+                "Option A: MeOH (용매 겸 반응물)",
+                "Option B: DCM 또는 DMF",
+            ],
+            "temperature": "Option A: 환류 (65 °C) / Option B: 0 °C → RT",
+            "time": "Option A: 4–12 h / Option B: 12–18 h",
         }); n += 1
         steps.append({
             "step": str(n), "type": "workup",
             "title": "Workup",
-            "detail": "중화(K₂CO₃ aq.) → EtOAc 추출 → 건조 → 농축",
+            "detail": "산 촉매 및 DCM urea 제거",
+            "reagents": [
+                "Option A: 포화 K₂CO₃ aq. (중화)",
+                "Option B: Celite 여과 (DCU 제거) → K₂CO₃ aq. 세척",
+                "Na₂SO₄ (건조제)",
+            ],
+            "catalyst": [],
+            "solvent": ["EtOAc (추출)"],
+            "temperature": "RT",
+            "time": "30–60 min",
         }); n += 1
+
     elif kind == "reference":
         steps.append({
             "step": str(n), "type": "reaction",
-            "title": "Benchmark 처리 없음",
-            "detail": "입력 물질 자체를 기준 후보로 설정 — 제형 compatibility 먼저 평가",
+            "title": "Reference — 직접 합성 없음",
+            "detail": "입력 물질 자체를 benchmark로 설정, 유도체와 비교 대조군으로 활용",
+            "reagents": [],
+            "catalyst": [],
+            "solvent": [],
+            "temperature": "",
+            "time": "",
         }); n += 1
+
     elif flags.get("amide"):
         steps.append({
             "step": str(n), "type": "reaction",
-            "title": "치환기 변형 또는 염 형성",
-            "detail": "amide 골격 유지, N-alkylation 또는 산 염 형성으로 용해도 조절",
+            "title": "N-Alkylation 또는 산 염 형성",
+            "detail": "amide 골격 유지, 치환기 변형으로 용해도·투과성 조절",
+            "reagents": [
+                "N-alkylation: 알킬 할라이드 1.2 eq. + 염기",
+                "염 형성: HCl (in dioxane) 또는 TFA 1.0 eq.",
+            ],
+            "catalyst": [
+                "K₂CO₃ 또는 Cs₂CO₃ (N-alkylation 염기)",
+                "또는 NaH 1.1 eq. (강염기 필요 시)",
+            ],
+            "solvent": [
+                "DMF 또는 DMSO (N-alkylation)",
+                "또는 EtOAc / MeOH (염 형성)",
+            ],
+            "temperature": "RT → 60 °C (alkylation) / 0 °C (염 형성)",
+            "time": "4–12 h (alkylation) / 1 h (염 형성)",
         }); n += 1
         steps.append({
             "step": str(n), "type": "workup",
             "title": "Workup",
-            "detail": "여과 또는 추출 후 건조 및 농축",
+            "detail": "여과 또는 추출 후 건조",
+            "reagents": ["H₂O 세척", "Na₂SO₄ (건조)"],
+            "catalyst": [],
+            "solvent": ["EtOAc"],
+            "temperature": "RT",
+            "time": "30 min",
         }); n += 1
+
     else:
         steps.append({
             "step": str(n), "type": "reaction",
-            "title": "유도체화 반응",
-            "detail": "반응성 작용기 확인 후 보호기 전략 수립 → fragment 치환 또는 coupling",
+            "title": "유도체화 반응 (탐색 단계)",
+            "detail": "반응성 작용기 확인 후 최적 반응 전략 수립",
+            "reagents": [
+                "작용기에 따라 선택: 할라이드, coupling 시약, 보호기 등",
+                "소량 스크리닝(0.1–0.5 mmol)으로 조건 최적화 먼저 시행",
+            ],
+            "catalyst": [
+                "Pd 촉매 (C–C coupling 필요 시)",
+                "Lewis acid (Friedel-Crafts 등 필요 시)",
+            ],
+            "solvent": ["반응 유형에 따라 DMF, THF, DCM, MeOH 등"],
+            "temperature": "RT → 60 °C (반응 유형에 따라)",
+            "time": "4–12 h (조건 스크리닝 후 결정)",
         }); n += 1
         steps.append({
             "step": str(n), "type": "workup",
             "title": "Workup",
-            "detail": "수세, 건조, 감압 농축",
+            "detail": "일반적 수계 워크업",
+            "reagents": ["H₂O 세척", "Na₂SO₄"],
+            "catalyst": [],
+            "solvent": ["EtOAc"],
+            "temperature": "RT",
+            "time": "30 min",
         }); n += 1
 
-    # 정제
-    if desc.get("mw", 999) < 350:
+    # ── 정제 ──────────────────────────────────────────────────────────────
+    if mw < 350 and tpsa > 40:
         steps.append({
             "step": str(n), "type": "purification",
             "title": "재결정",
-            "detail": "EtOH/H₂O 또는 EtOAc/헥산 계 — 저분자 극성 화합물에 유리",
+            "detail": "저분자 극성 화합물에 유리 — 용매 조합 스크리닝 필요",
+            "conditions": [
+                "EtOH/H₂O (극성 화합물, 1:1 → 1:3 탐색)",
+                "EtOAc/헥산 (중간극성, 1:5 → 1:2 탐색)",
+                "MeOH/DCM (방향족, 1:10 → 1:5 탐색)",
+                "hot dissolution → slow cool → 진공여과",
+            ],
+            "reagents": [], "catalyst": [], "solvent": [], "temperature": "열 용해 후 서냉", "time": "2–12 h",
         }); n += 1
     else:
+        # logP에 따라 용리제 비율 조정
+        eluent = "EtOAc:Hex = 1:9 → 1:4 → 1:2" if logp > 2 else "EtOAc:Hex = 1:4 → 1:2 → EtOAc 100%"
         steps.append({
             "step": str(n), "type": "purification",
             "title": "컬럼 크로마토그래피",
-            "detail": "SiO₂, EtOAc/Hex 구배 → 필요 시 역상 prep-HPLC",
+            "detail": "SiO₂ 정규상 크로마토그래피 — logP 기반 용리제 설계",
+            "conditions": [
+                f"고정상: SiO₂ (230–400 mesh, 60 Å)",
+                f"이동상: {eluent} 단계 구배",
+                "TLC 모니터링: UV 254 nm / KMnO₄ 또는 H₂SO₄ charring",
+                f"목표 Rf: 0.25–0.40 (최적 용리 분획에서)",
+                "필요 시 역상 prep-HPLC (C18, MeCN/H₂O) 추가 정제",
+            ],
+            "reagents": [], "catalyst": [], "solvent": [], "temperature": "RT", "time": "2–6 h",
         }); n += 1
 
+    # ── 분석 ──────────────────────────────────────────────────────────────
     steps.append({
         "step": str(n), "type": "analysis",
-        "title": "구조 확인",
-        "detail": "¹H / ¹³C NMR, HRMS (ESI) — 합성 완료 판단 기준",
+        "title": "구조 확인 (NMR / MS)",
+        "detail": "합성 완료 및 구조 동일성 확인",
+        "conditions": [
+            "¹H NMR (400 MHz, DMSO-d₆ 또는 CDCl₃) — 주요 작용기 피크 확인",
+            "¹³C NMR (100 MHz) — 탄소 골격 확인",
+            "HRMS (ESI+/−): 계산값 vs 측정값 오차 ≤ 5 ppm",
+            "IR (ATR): 특성 흡수대 확인 (C=O, O–H 등)",
+        ],
+        "reagents": [], "catalyst": [], "solvent": [], "temperature": "RT", "time": "",
     }); n += 1
 
     steps.append({
         "step": str(n), "type": "end",
-        "title": "순도 확인",
-        "detail": "HPLC 순도 ≥ 95% 확인 후 다음 단계 진행",
+        "title": "순도 확인 (HPLC)",
+        "detail": "최종 원료 품질 기준 충족 확인",
+        "conditions": [
+            "역상 HPLC: C18 컬럼, MeCN/H₂O (0.1% TFA) 구배",
+            "목표 순도: ≥ 95% (면적 기준, 220 nm 또는 254 nm)",
+            "잔류 용매: ICH Q3C Class 2 기준 (예: DMF ≤ 880 ppm)",
+        ],
+        "reagents": [], "catalyst": [], "solvent": [], "temperature": "RT", "time": "",
     })
 
     return steps
