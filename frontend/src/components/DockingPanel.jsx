@@ -4,6 +4,15 @@ import StructureViewer from './StructureViewer';
 
 const mono = { fontFamily: "'JetBrains Mono',monospace" };
 
+const PRESETS = [
+  ['나이아신아마이드', 'O=C(N)c1cccnc1'],
+  ['아스코르브산',     'OC[C@H](O)[C@H]1OC(=O)C(O)=C1O'],
+  ['페룰산',          'COc1cc(/C=C/C(=O)O)ccc1O'],
+  ['코지산',          'OCC1=CC(=O)C(O)=CO1'],
+  ['레스베라트롤',    'OC1=CC(=CC(=C1)/C=C/c1ccc(O)cc1)O'],
+  ['살리실산',        'OC(=O)c1ccccc1O'],
+];
+
 const GRADE_META = {
   strong:   { color: 'var(--good)', label: '강한 결합',   bar: 95 },
   moderate: { color: 'var(--warn)', label: '중간 결합',   bar: 65 },
@@ -50,7 +59,7 @@ function DescRow({ label, value, unit }) {
   );
 }
 
-export default function DockingPanel() {
+export default function DockingPanel({ compounds = [] }) {
   const [targets,     setTargets]     = useState([]);
   const [selectedKey, setSelectedKey] = useState('');
   const [smiles,      setSmiles]      = useState('');
@@ -110,6 +119,53 @@ export default function DockingPanel() {
             <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, margin: '2px 0 0' }}>분자 도킹 설정</h2>
           </div>
           <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* 분석된 화합물에서 선택 */}
+            {compounds.length > 0 && (
+              <div>
+                <div style={{ ...mono, fontSize: 10, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                  분석된 화합물
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {compounds.map(c => (
+                    <button key={c.id} type="button"
+                      onClick={() => { setSmiles(c.smiles); setMolName(c.name || ''); }}
+                      style={{
+                        fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 600,
+                        color: smiles === c.smiles ? '#fff' : 'var(--accent)',
+                        background: smiles === c.smiles ? 'var(--accent)' : 'var(--accent-soft)',
+                        border: `1px solid var(--accent)`,
+                        borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
+                      }}>
+                      {c.name || c.smiles.slice(0, 12) + '…'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 프리셋 */}
+            <div>
+              <div style={{ ...mono, fontSize: 10, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                자주 쓰는 원료
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {PRESETS.map(([name, smi]) => (
+                  <button key={name} type="button"
+                    onClick={() => { setSmiles(smi); setMolName(name); }}
+                    style={{
+                      fontFamily: "'Space Grotesk',sans-serif", fontSize: 11,
+                      color: smiles === smi ? '#fff' : 'var(--ink)',
+                      background: smiles === smi ? 'var(--accent)' : 'var(--panel-2)',
+                      border: `1px solid ${smiles === smi ? 'var(--accent)' : 'var(--line)'}`,
+                      borderRadius: 8, padding: '4px 9px', cursor: 'pointer',
+                    }}>
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* SMILES */}
             <div>
               <label style={{ ...mono, fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 5 }}>SMILES</label>

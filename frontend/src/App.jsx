@@ -121,7 +121,7 @@ export default function App() {
         )}
         {tab === 'docking' && (
           <div style={{ paddingTop: 18 }}>
-            <DockingPanel />
+            <DockingPanel compounds={comparisonList} />
           </div>
         )}
         {tab === 'history' && (
