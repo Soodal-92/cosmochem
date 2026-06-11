@@ -4,6 +4,7 @@ import ComparisonSheet from './components/ComparisonSheet';
 import SimilarPanel from './components/SimilarPanel';
 import CandidatePanel from './components/CandidatePanel';
 import DOEPanel from './components/DOEPanel';
+import DockingPanel from './components/DockingPanel';
 import HistoryPanel from './components/HistoryPanel';
 import { analyzeSmiles } from './api';
 
@@ -71,7 +72,7 @@ export default function App() {
 
       {/* 탭 */}
       <div style={{ maxWidth: 1180, margin: '14px auto 0', padding: '0 20px', display: 'flex', gap: 4 }}>
-        {[['analyze', '구조 분석'], ['candidate', '후보 설계'], ['doe', 'DOE 실험계획'], ['history', '히스토리']].map(([id, lbl]) => (
+        {[['analyze', '구조 분석'], ['candidate', '후보 설계'], ['doe', 'DOE 실험계획'], ['docking', '분자 도킹'], ['history', '히스토리']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)}
             style={{
               fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13,
@@ -116,6 +117,11 @@ export default function App() {
         {tab === 'doe' && (
           <div style={{ paddingTop: 18, maxWidth: 900 }}>
             <DOEPanel />
+          </div>
+        )}
+        {tab === 'docking' && (
+          <div style={{ paddingTop: 18 }}>
+            <DockingPanel />
           </div>
         )}
         {tab === 'history' && (

@@ -121,6 +121,28 @@ export async function deleteCandidate(id) {
   return r.json();
 }
 
+export async function listDockingTargets() {
+  const r = await fetch(`${BASE}/docking/targets`);
+  if (!r.ok) throw new Error('타겟 목록 조회 실패');
+  return r.json();
+}
+
+export async function submitDocking({ smiles, target, name }) {
+  const r = await fetch(`${BASE}/jobs/docking`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ smiles, target, name }),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '도킹 제출 실패'); }
+  return r.json();
+}
+
+export async function getDockingJob(jobId) {
+  const r = await fetch(`${BASE}/jobs/${jobId}`);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Job 조회 실패'); }
+  return r.json();
+}
+
 export async function searchSimilar(smiles, { threshold = 75, max = 6 } = {}) {
   const params = new URLSearchParams({ smiles, threshold, max_records: max });
   const r = await fetch(`${BASE}/similar?${params}`, { signal: AbortSignal.timeout(30000) });

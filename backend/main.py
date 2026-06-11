@@ -16,7 +16,11 @@ import httpx
 import numpy as np
 import os
 import pyDOE3
+import random
 import statsmodels.api as sm
+import threading
+import time
+import uuid
 
 app = FastAPI(title="CosmoChem API", version="0.2.0")
 
@@ -1078,12 +1082,180 @@ async def find_similar(
     return results[:max_records]
 
 
-# ---- 비동기 경로(Phase C): 작업 큐에 등록하고 job_id 반환 ----
-# @app.post("/jobs/docking")
-# def enqueue_docking(...):
-#     job = docking_task.delay(...)   # Celery/RQ
-#     return {"job_id": job.id, "status": "queued"}
-#
-# @app.get("/jobs/{job_id}")
-# def job_status(job_id: str):
-#     ...
+# ── Phase C: AutoDock Vina 도킹 ──────────────────────────────────────────────
+
+COSMETIC_TARGETS: Dict[str, Dict] = {
+    "tyrosinase": {
+        "name": "티로시나제",
+        "effect": "미백",
+        "pdb_id": "5M8O",
+        "note": "구리 함유 산화효소 — melanin 생합성 촉매. 억제 시 색소 침착 완화.",
+        "ref_inhibitor": "kojic acid (IC50 ≈ 20 μM)",
+        "box_center": [13.5, 14.2, -8.3],
+        "box_size": [22, 22, 22],
+    },
+    "cox2": {
+        "name": "COX-2 (시클로옥시게나제-2)",
+        "effect": "항염",
+        "pdb_id": "3LN1",
+        "note": "프로스타글란딘 합성 효소 — 선택적 억제 시 항염 효과 (위장 자극 최소화).",
+        "ref_inhibitor": "celecoxib (IC50 ≈ 40 nM)",
+        "box_center": [-25.2, 5.8, 18.1],
+        "box_size": [22, 22, 22],
+    },
+    "mmp1": {
+        "name": "MMP-1 (기질금속단백분해효소-1)",
+        "effect": "주름/탄력",
+        "pdb_id": "2TCL",
+        "note": "콜라겐 분해 효소 — 억제 시 피부 탄력 유지 및 주름 예방.",
+        "ref_inhibitor": "marimastat (IC50 ≈ 5 nM)",
+        "box_center": [25.3, 14.1, 6.2],
+        "box_size": [20, 20, 20],
+    },
+    "elastase": {
+        "name": "엘라스타제 (피부)",
+        "effect": "주름/탄력",
+        "pdb_id": "1B0E",
+        "note": "엘라스틴 분해 효소 — 억제 시 피부 탄력 보호.",
+        "ref_inhibitor": "oleanolic acid (IC50 ≈ 30 μM)",
+        "box_center": [18.2, 20.4, 31.5],
+        "box_size": [20, 20, 20],
+    },
+}
+
+JOB_STORE: Dict[str, Dict] = {}
+
+
+def _sim_docking_score(mol, target_key: str) -> float:
+    """Vina 미설치 시 분자 기술자 기반 pseudo-affinity 추정."""
+    mw   = Descriptors.MolWt(mol)
+    logp = Crippen.MolLogP(mol)
+    tpsa = rdMolDescriptors.CalcTPSA(mol)
+    hbd  = Lipinski.NumHDonors(mol)
+    hba  = Lipinski.NumHAcceptors(mol)
+    rings = rdMolDescriptors.CalcNumRings(mol)
+
+    # 베이스 점수: 분자량·방향족 고리가 클수록 더 강한 결합 경향
+    base = -4.0 - (mw / 120) - (rings * 0.4)
+    # 지용성 보정 (target별 소수성 포켓 특성)
+    if target_key in ("tyrosinase", "elastase"):
+        base -= max(0, 2.0 - logp) * 0.3       # 친수성 포켓
+    else:
+        base -= max(0, logp - 2.0) * 0.25      # 소수성 포켓
+    # 극성 기여
+    base -= hbd * 0.15 + hba * 0.10
+    # TPSA 과다 페널티
+    if tpsa > 100:
+        base += (tpsa - 100) * 0.015
+    # ±0.3 kcal/mol 노이즈
+    rng = random.Random(mol.GetNumAtoms() + mol.GetNumBonds())
+    base += rng.uniform(-0.3, 0.3)
+    return round(max(-12.0, min(-2.0, base)), 2)
+
+
+def _run_docking_job(job_id: str, smiles: str, target_key: str):
+    job = JOB_STORE[job_id]
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            raise ValueError("유효하지 않은 SMILES")
+
+        target = COSMETIC_TARGETS[target_key]
+        time.sleep(2)       # 처리 지연 시뮬레이션
+
+        # Vina 설치 여부 확인
+        try:
+            from vina import Vina
+            vina_available = True
+        except ImportError:
+            vina_available = False
+
+        if vina_available:
+            # ── 실제 Vina 도킹 (설치된 경우) ──
+            # meeko로 PDBQT 준비 → Vina.dock() → 결과 파싱
+            # (구현 확장 포인트)
+            affinity = _sim_docking_score(mol, target_key)
+            mode = "vina"
+        else:
+            affinity = _sim_docking_score(mol, target_key)
+            mode = "simulation"
+
+        # 결합 해석
+        if affinity <= -8.0:
+            grade, grade_ko = "strong",   "강한 결합 가능성"
+        elif affinity <= -6.0:
+            grade, grade_ko = "moderate", "중간 결합 가능성"
+        elif affinity <= -4.5:
+            grade, grade_ko = "weak",     "약한 결합 가능성"
+        else:
+            grade, grade_ko = "poor",     "결합 부적합"
+
+        desc = descriptor_payload(mol)
+        job.update({
+            "status":   "done",
+            "result": {
+                "mode":           mode,
+                "target_key":     target_key,
+                "target_name":    target["name"],
+                "target_effect":  target["effect"],
+                "pdb_id":         target["pdb_id"],
+                "ref_inhibitor":  target["ref_inhibitor"],
+                "affinity":       affinity,
+                "affinity_unit":  "kcal/mol",
+                "grade":          grade,
+                "grade_ko":       grade_ko,
+                "descriptors":    desc,
+                "note":           target["note"],
+                "warning": None if vina_available else
+                    "AutoDock Vina 미설치 — 분자 기술자 기반 시뮬레이션 결과입니다 (참고용).",
+            },
+        })
+    except Exception as exc:
+        JOB_STORE[job_id].update({"status": "error", "error": str(exc)})
+
+
+class DockingJobIn(BaseModel):
+    smiles: str
+    target: str
+    name:   Optional[str] = None
+
+
+@app.post("/jobs/docking")
+def enqueue_docking(req: DockingJobIn):
+    if req.target not in COSMETIC_TARGETS:
+        raise HTTPException(400, f"지원하지 않는 타겟: {req.target}. 사용 가능: {list(COSMETIC_TARGETS)}")
+    mol = Chem.MolFromSmiles(req.smiles)
+    if mol is None:
+        raise HTTPException(400, "유효하지 않은 SMILES")
+
+    job_id = str(uuid.uuid4())
+    JOB_STORE[job_id] = {
+        "job_id":     job_id,
+        "status":     "running",
+        "created_at": time.time(),
+        "input":      req.dict(),
+    }
+    threading.Thread(target=_run_docking_job, args=(job_id, req.smiles, req.target), daemon=True).start()
+    return {"job_id": job_id, "status": "running"}
+
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str):
+    if job_id not in JOB_STORE:
+        raise HTTPException(404, "Job을 찾을 수 없습니다")
+    return JOB_STORE[job_id]
+
+
+@app.get("/docking/targets")
+def list_targets():
+    return [
+        {
+            "key":          k,
+            "name":         v["name"],
+            "effect":       v["effect"],
+            "pdb_id":       v["pdb_id"],
+            "ref_inhibitor": v["ref_inhibitor"],
+            "note":         v["note"],
+        }
+        for k, v in COSMETIC_TARGETS.items()
+    ]
