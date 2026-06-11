@@ -179,11 +179,11 @@ export default function CompoundDetailModal({ compound, onClose }) {
                         }}>{TIER_KO[tier]}</span>
                       )}
                     </div>
-                    <div style={{ ...mono, fontSize: 22, fontWeight: 700, color: col, lineHeight: 1 }}>
+                    <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>
                       {text}
-                      {unit && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--faint)', marginLeft: 4 }}>{unit}</span>}
+                      {unit && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--muted)', marginLeft: 5 }}>{unit}</span>}
                     </div>
-                    <div style={{ ...mono, fontSize: 10, color: 'var(--faint)', marginTop: 6 }}>{sub}</div>
+                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, color: 'var(--muted)', marginTop: 7 }}>{sub}</div>
                   </div>
                 );
               })}
