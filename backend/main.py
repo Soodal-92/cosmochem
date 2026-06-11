@@ -51,6 +51,23 @@ class CandidateGenerateIn(BaseModel):
     target: str = "brightening"
 
 
+class CandidateSaveIn(BaseModel):
+    input_smiles: str
+    input_name: Optional[str] = None
+    target: str
+    label: str
+    smiles: str
+    candidate_type: str
+    confidence: str
+    descriptors: Dict[str, Any]
+    scores: Dict[str, Any]
+    compound_types: List[str] = []
+    synthesis: List[str] = []
+    purification_plan: Optional[Dict[str, Any]] = None
+    analysis_plan: Optional[Dict[str, Any]] = None
+    rationale: List[str] = []
+
+
 def load_local_env():
     """Load backend/.env for local development without adding a runtime dependency."""
     env_path = Path(__file__).with_name(".env")
@@ -855,6 +872,33 @@ async def save_doe_experiment(req: DoeExperimentSaveIn):
 @app.get("/doe-experiments")
 async def list_doe_experiments():
     return await supabase_request("GET", "doe_experiments", query="?select=*&order=created_at.desc&limit=20")
+
+
+@app.post("/candidates")
+async def save_candidate(req: CandidateSaveIn):
+    row = {
+        "input_smiles":    req.input_smiles.strip(),
+        "input_name":      req.input_name or None,
+        "target":          req.target,
+        "label":           req.label,
+        "smiles":          req.smiles.strip(),
+        "candidate_type":  req.candidate_type,
+        "confidence":      req.confidence,
+        "descriptors":     req.descriptors,
+        "scores":          req.scores,
+        "compound_types":  req.compound_types,
+        "synthesis":       req.synthesis,
+        "purification_plan": req.purification_plan,
+        "analysis_plan":   req.analysis_plan,
+        "rationale":       req.rationale,
+    }
+    rows = await supabase_request("POST", "candidates", payload=row)
+    return rows[0] if rows else None
+
+
+@app.get("/candidates")
+async def list_candidates():
+    return await supabase_request("GET", "candidates", query="?select=*&order=created_at.desc&limit=30")
 
 
 # ---- 비동기 경로(Phase C): 작업 큐에 등록하고 job_id 반환 ----

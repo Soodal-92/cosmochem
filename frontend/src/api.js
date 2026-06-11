@@ -86,3 +86,19 @@ export async function generateCandidates({ smiles, name, target }) {
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '후보 설계 실패'); }
   return r.json();
 }
+
+export async function saveCandidate(payload) {
+  const r = await fetch(`${BASE}/candidates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '후보 저장 실패'); }
+  return r.json();
+}
+
+export async function listCandidates() {
+  const r = await fetch(`${BASE}/candidates`);
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '후보 목록 조회 실패'); }
+  return r.json();
+}

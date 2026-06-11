@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { generateCandidates } from '../api';
+import { generateCandidates, saveCandidate } from '../api';
 import StructureViewer from './StructureViewer';
 
 const TARGETS = [
@@ -153,6 +153,9 @@ export default function CandidatePanel() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [savedIndices, setSavedIndices] = useState(new Set());
+  const [savingIndex, setSavingIndex] = useState(null);
+  const [saveError, setSaveError] = useState('');
 
   function selectPreset([, presetSmiles, labelText]) {
     setName(labelText);
@@ -163,6 +166,8 @@ export default function CandidatePanel() {
     e.preventDefault();
     setError('');
     setResult(null);
+    setSavedIndices(new Set());
+    setSaveError('');
     setLoading(true);
     try {
       setResult(await generateCandidates({ smiles, name, target }));
@@ -170,6 +175,35 @@ export default function CandidatePanel() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSave(candidate, index) {
+    if (savedIndices.has(index) || savingIndex === index) return;
+    setSavingIndex(index);
+    setSaveError('');
+    try {
+      await saveCandidate({
+        input_smiles:     result.input.smiles,
+        input_name:       result.input.name,
+        target:           result.input.target,
+        label:            candidate.label,
+        smiles:           candidate.smiles,
+        candidate_type:   candidate.candidate_type,
+        confidence:       candidate.confidence,
+        descriptors:      candidate.descriptors,
+        scores:           candidate.scores,
+        compound_types:   candidate.purification_plan?.compound_types ?? [],
+        synthesis:        candidate.synthesis,
+        purification_plan: candidate.purification_plan ?? null,
+        analysis_plan:    candidate.analysis_plan ?? null,
+        rationale:        candidate.rationale,
+      });
+      setSavedIndices(prev => new Set([...prev, index]));
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSavingIndex(null);
     }
   }
 
@@ -230,6 +264,12 @@ export default function CandidatePanel() {
           </div>
         )}
 
+        {saveError && (
+          <div style={{ marginBottom: 12, background: 'var(--flag-soft)', border: '1px solid var(--flag)', borderRadius: 10, padding: '8px 14px', fontSize: 12, color: 'var(--flag)' }}>
+            저장 오류: {saveError}
+          </div>
+        )}
+
         {result?.candidates?.map((candidate, index) => (
           <article key={`${candidate.label}-${candidate.smiles}-${index}`} style={card}>
             <div style={cardH}>
@@ -239,7 +279,20 @@ export default function CandidatePanel() {
                 </span>
                 <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, margin: '2px 0 0' }}>{candidate.label}</h2>
               </div>
-              <span style={{ ...mono, fontSize: 11, color: 'var(--faint)' }}>confidence {candidate.confidence}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ ...mono, fontSize: 11, color: 'var(--faint)' }}>confidence {candidate.confidence}</span>
+                <button
+                  onClick={() => handleSave(candidate, index)}
+                  disabled={savedIndices.has(index) || savingIndex === index}
+                  style={{
+                    ...btn(savedIndices.has(index) ? 'var(--good)' : 'var(--accent)'),
+                    fontSize: 11, padding: '5px 12px',
+                    opacity: savingIndex === index ? 0.6 : 1,
+                  }}
+                >
+                  {savedIndices.has(index) ? '✓ 저장됨' : savingIndex === index ? '저장 중…' : '저장'}
+                </button>
+              </div>
             </div>
             <div style={cardB}>
               <div style={{ ...mono, fontSize: 11, color: 'var(--muted)', overflowWrap: 'anywhere', marginBottom: 14 }}>
