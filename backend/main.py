@@ -1156,17 +1156,20 @@ async def find_similar(
     canonical = Chem.MolToSmiles(query_mol, canonical=True)
     query_fp  = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, 2048)
 
-    # PubChem fastsimilarity_2d: Threshold/MaxRecords must be URL query params (not form fields)
-    # PubChem requires Threshold >= 70
+    # PubChem fastsimilarity_2d: GET with SMILES in URL path
+    # - POST triggers PUGREST.ServerError for many SMILES
+    # - Stereo bonds (/ in SMILES) must be stripped: %2F in URL path breaks PubChem routing
     pc_threshold = max(70, threshold)
+    search_smiles = Chem.MolToSmiles(query_mol, canonical=True, isomericSmiles=False)
     sim_url = (
-        "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/cids/JSON"
+        "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/"
+        f"{quote(search_smiles, safe='')}/cids/JSON"
         f"?Threshold={pc_threshold}&MaxRecords={max_records + 8}"
     )
 
     async with httpx.AsyncClient(timeout=35) as client:
         try:
-            r = await client.post(sim_url, data={"smiles": canonical})
+            r = await client.get(sim_url)
         except Exception as exc:
             raise HTTPException(502, f"PubChem 요청 실패: {exc}")
 
