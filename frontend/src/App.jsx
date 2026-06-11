@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import InputPanel from './components/InputPanel';
 import ComparisonSheet from './components/ComparisonSheet';
+import SimilarPanel from './components/SimilarPanel';
 import CandidatePanel from './components/CandidatePanel';
 import DOEPanel from './components/DOEPanel';
 import HistoryPanel from './components/HistoryPanel';
@@ -36,6 +37,15 @@ export default function App() {
 
   function handleRemove(id) {
     setComparisonList(prev => prev.filter(c => c.id !== id));
+  }
+
+  function handleAddSimilar(smi, name, data) {
+    setComparisonList(prev => {
+      const idx = prev.findIndex(c => c.smiles === smi);
+      if (idx >= 0) return prev;
+      const id = `${smi}-${Date.now()}`;
+      return [...prev, { id, name, smiles: smi, data }].slice(0, 6);
+    });
   }
 
   return (
@@ -85,6 +95,11 @@ export default function App() {
                   {error}
                 </div>
               )}
+              <SimilarPanel
+                querySmiles={comparisonList.at(-1)?.smiles ?? null}
+                onAdd={handleAddSimilar}
+                addedSmiles={new Set(comparisonList.map(c => c.smiles))}
+              />
             </div>
             <ComparisonSheet
               compounds={comparisonList}

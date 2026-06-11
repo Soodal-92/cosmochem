@@ -120,3 +120,10 @@ export async function deleteCandidate(id) {
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '삭제 실패'); }
   return r.json();
 }
+
+export async function searchSimilar(smiles, { threshold = 75, max = 6 } = {}) {
+  const params = new URLSearchParams({ smiles, threshold, max_records: max });
+  const r = await fetch(`${BASE}/similar?${params}`, { signal: AbortSignal.timeout(30000) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || '유사 구조 검색 실패'); }
+  return r.json();
+}

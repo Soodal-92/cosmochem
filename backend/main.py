@@ -3,11 +3,11 @@ CosmoChem API — Phase B
 동기 경로: 단일 분자 descriptor → 즉시 응답
 비동기 경로(Phase C): docking / QSAR batch → 작업 큐
 """
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rdkit import Chem
-from rdkit.Chem import AllChem, Descriptors, Crippen, Lipinski, rdMolDescriptors
+from rdkit.Chem import AllChem, DataStructs, Descriptors, Crippen, Lipinski, rdMolDescriptors
 from rdkit.Chem.Draw import rdMolDraw2D
 from urllib.parse import quote
 from pathlib import Path
@@ -919,6 +919,72 @@ async def delete_doe_experiment(record_id: str):
 async def delete_candidate(record_id: str):
     await supabase_request("DELETE", "candidates", query=f"?id=eq.{record_id}")
     return {"deleted": record_id}
+
+
+@app.get("/similar")
+async def find_similar(
+    smiles: str = Query(...),
+    threshold: int = Query(75, ge=50, le=99),
+    max_records: int = Query(6, ge=1, le=10),
+):
+    query_mol = Chem.MolFromSmiles(smiles)
+    if not query_mol:
+        raise HTTPException(400, "유효하지 않은 SMILES")
+    query_fp = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, 2048)
+
+    # PubChem 2D fastsimilarity → CID 목록
+    try:
+        r = await httpx.AsyncClient(timeout=25).post(
+            "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/cids/JSON",
+            data={"smiles": smiles, "Threshold": threshold, "MaxRecords": max_records + 6},
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"PubChem 요청 실패: {exc}")
+
+    if r.status_code == 404:
+        return []
+    if not r.is_success:
+        raise HTTPException(502, "PubChem 유사도 검색 오류")
+
+    cids = r.json().get("IdentifierList", {}).get("CID", [])
+    if not cids:
+        return []
+
+    # CID → SMILES + 이름 + 기본 속성
+    cid_str = ",".join(str(c) for c in cids[: max_records + 6])
+    try:
+        pr = await httpx.AsyncClient(timeout=15).get(
+            f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_str}"
+            "/property/IUPACName,IsomericSMILES,MolecularFormula,MolecularWeight/JSON"
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"PubChem 속성 조회 실패: {exc}")
+
+    props = pr.json().get("PropertyTable", {}).get("Properties", []) if pr.is_success else []
+
+    results = []
+    for p in props:
+        smi = p.get("IsomericSMILES", "")
+        if not smi:
+            continue
+        mol = Chem.MolFromSmiles(smi)
+        if not mol:
+            continue
+        fp  = AllChem.GetMorganFingerprintAsBitVect(mol, 2, 2048)
+        sim = DataStructs.TanimotoSimilarity(query_fp, fp)
+        if sim >= 1.0:          # 자기 자신 제외
+            continue
+        results.append({
+            "cid":        p.get("CID"),
+            "name":       p.get("IUPACName") or f"CID {p.get('CID')}",
+            "smiles":     smi,
+            "formula":    p.get("MolecularFormula", ""),
+            "mw":         p.get("MolecularWeight"),
+            "similarity": round(sim, 3),
+        })
+
+    results.sort(key=lambda x: x["similarity"], reverse=True)
+    return results[:max_records]
 
 
 # ---- 비동기 경로(Phase C): 작업 큐에 등록하고 job_id 반환 ----
