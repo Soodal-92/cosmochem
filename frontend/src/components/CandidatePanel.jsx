@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { generateCandidates, saveCandidate } from '../api';
 import StructureViewer from './StructureViewer';
 import SynthesisFlow from './SynthesisFlow';
+import { exportCandidatesCsv, printCandidatePdf } from '../utils/exportUtils';
 
 const TARGETS = [
   ['brightening', '미백'],
@@ -268,6 +269,19 @@ export default function CandidatePanel() {
         {saveError && (
           <div style={{ marginBottom: 12, background: 'var(--flag-soft)', border: '1px solid var(--flag)', borderRadius: 10, padding: '8px 14px', fontSize: 12, color: 'var(--flag)' }}>
             저장 오류: {saveError}
+          </div>
+        )}
+
+        {result?.candidates?.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => exportCandidatesCsv(result.candidates.map(c => ({ ...c, target: result.input.target })))}
+              style={{ ...mono, fontSize: 11, color: 'var(--good)', background: 'transparent', border: '1px solid var(--good)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+            >CSV 내보내기</button>
+            <button
+              onClick={() => printCandidatePdf(result.candidates.map(c => ({ ...c, target: result.input.target })))}
+              style={{ ...mono, fontSize: 11, color: 'var(--accent)', background: 'transparent', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+            >PDF 인쇄</button>
           </div>
         )}
 

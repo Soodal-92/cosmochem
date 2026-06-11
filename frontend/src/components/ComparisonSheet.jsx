@@ -2,6 +2,7 @@ import { useState } from 'react';
 import StructureViewer from './StructureViewer';
 import CompoundDetailModal from './CompoundDetailModal';
 import { saveCompound } from '../api';
+import { exportComparisonCsv } from '../utils/exportUtils';
 
 const mono = { fontFamily: "'JetBrains Mono',monospace" };
 
@@ -87,13 +88,22 @@ export default function ComparisonSheet({ compounds, onRemove, onClear }) {
             <span style={{ ...mono, fontSize: 11, color: 'var(--faint)', fontWeight: 400 }}>{compounds.length}개 · 최대 6개</span>
           </h2>
         </div>
-        <button onClick={onClear} style={{
-          ...mono, fontSize: 11, color: 'var(--flag)',
-          background: 'transparent', border: '1px solid var(--flag)',
-          borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
-        }}>
-          전체 초기화
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => exportComparisonCsv(compounds)} style={{
+            ...mono, fontSize: 11, color: 'var(--good)',
+            background: 'transparent', border: '1px solid var(--good)',
+            borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
+          }}>
+            CSV 내보내기
+          </button>
+          <button onClick={onClear} style={{
+            ...mono, fontSize: 11, color: 'var(--flag)',
+            background: 'transparent', border: '1px solid var(--flag)',
+            borderRadius: 8, padding: '5px 10px', cursor: 'pointer',
+          }}>
+            전체 초기화
+          </button>
+        </div>
       </div>
 
       {saveErr && (
