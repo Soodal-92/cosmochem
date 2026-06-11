@@ -1156,27 +1156,34 @@ async def find_similar(
     canonical = Chem.MolToSmiles(query_mol, canonical=True)
     query_fp  = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, 2048)
 
-    # PubChem 2D fastsimilarity → CID 목록 (POST with form data)
-    async with httpx.AsyncClient(timeout=30) as client:
+    # PubChem fastsimilarity_2d: Threshold/MaxRecords must be URL query params (not form fields)
+    # PubChem requires Threshold >= 70
+    pc_threshold = max(70, threshold)
+    sim_url = (
+        "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/cids/JSON"
+        f"?Threshold={pc_threshold}&MaxRecords={max_records + 8}"
+    )
+
+    async with httpx.AsyncClient(timeout=35) as client:
         try:
-            r = await client.post(
-                "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastsimilarity_2d/smiles/cids/JSON",
-                data={"smiles": canonical, "Threshold": str(threshold), "MaxRecords": str(max_records + 8)},
-            )
+            r = await client.post(sim_url, data={"smiles": canonical})
         except Exception as exc:
             raise HTTPException(502, f"PubChem 요청 실패: {exc}")
 
         if r.status_code == 404:
             return []
         if not r.is_success:
-            raise HTTPException(502, f"PubChem 유사도 검색 오류 ({r.status_code})")
+            raise HTTPException(502, f"PubChem 유사도 검색 오류 ({r.status_code}): {r.text[:200]}")
 
-        cids = r.json().get("IdentifierList", {}).get("CID", [])
+        body = r.json()
+        if "Fault" in body:
+            return []
+        cids = body.get("IdentifierList", {}).get("CID", [])
         if not cids:
             return []
 
         # CID → SMILES + 이름 + 기본 속성
-        cid_str = ",".join(str(c) for c in cids[: max_records + 8])
+        cid_str = ",".join(str(c) for c in cids[:max_records + 8])
         try:
             pr = await client.get(
                 f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid_str}"
@@ -1186,7 +1193,9 @@ async def find_similar(
         except Exception as exc:
             raise HTTPException(502, f"PubChem 속성 조회 실패: {exc}")
 
-    props = pr.json().get("PropertyTable", {}).get("Properties", []) if pr.is_success else []
+    if not pr.is_success:
+        return []
+    props = pr.json().get("PropertyTable", {}).get("Properties", [])
 
     results = []
     for p in props:
