@@ -322,9 +322,7 @@ export default function DockingPanel({ compounds = [] }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 {/* 좌: 구조 + 친화도 게이지 */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 10, overflow: 'hidden' }}>
-                    <StructureViewer smiles={job.input?.smiles} height={160} />
-                  </div>
+                  <StructureViewer smiles={job.input?.smiles} height={220} />
                   <div style={{ background: 'var(--panel-2)', border: '1px solid var(--line-2)', borderRadius: 10, padding: '12px 14px' }}>
                     <AffinityGauge affinity={job.result.affinity} grade={job.result.grade} />
                   </div>

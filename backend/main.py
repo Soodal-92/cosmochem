@@ -355,11 +355,11 @@ def structure_svg(mol: MoleculeIn):
 
     rdMolDescriptors.CalcMolFormula(m)
     AllChem.Compute2DCoords(m)
-    drawer = rdMolDraw2D.MolDraw2DSVG(520, 280)
+    drawer = rdMolDraw2D.MolDraw2DSVG(520, 300)
     opts = drawer.drawOptions()
     opts.clearBackground = False
     opts.bondLineWidth = 1.4
-    opts.padding = 0.15
+    opts.padding = 0.2
     drawer.DrawMolecule(m)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
