@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import StructureViewer from './StructureViewer';
+import CompoundDetailModal from './CompoundDetailModal';
 import { saveCompound } from '../api';
 
 const mono = { fontFamily: "'JetBrains Mono',monospace" };
@@ -43,6 +44,7 @@ export default function ComparisonSheet({ compounds, onRemove, onClear }) {
   const [savingId, setSavingId]   = useState(null);
   const [savedIds, setSavedIds]   = useState(new Set());
   const [saveErr, setSaveErr]     = useState('');
+  const [detail,  setDetail]      = useState(null);
 
   async function handleSave(c) {
     if (savingId === c.id || savedIds.has(c.id)) return;
@@ -129,11 +131,18 @@ export default function ComparisonSheet({ compounds, onRemove, onClear }) {
                   <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 700, lineHeight: 1.3, flex: 1 }}>
                     {c.name || '이름 없음'}
                   </span>
-                  <button onClick={() => onRemove(c.id)} title="제거" style={{
-                    ...mono, fontSize: 11, color: 'var(--muted)',
-                    background: 'transparent', border: '1px solid var(--line)',
-                    borderRadius: 6, padding: '2px 6px', cursor: 'pointer', flexShrink: 0,
-                  }}>✕</button>
+                  <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => setDetail(c)} title="상세 보기" style={{
+                      ...mono, fontSize: 10, color: 'var(--accent)',
+                      background: 'transparent', border: '1px solid var(--accent)',
+                      borderRadius: 6, padding: '2px 6px', cursor: 'pointer',
+                    }}>상세</button>
+                    <button onClick={() => onRemove(c.id)} title="제거" style={{
+                      ...mono, fontSize: 11, color: 'var(--muted)',
+                      background: 'transparent', border: '1px solid var(--line)',
+                      borderRadius: 6, padding: '2px 6px', cursor: 'pointer',
+                    }}>✕</button>
+                  </div>
                 </div>
                 <div style={{ flex: 1, minHeight: 0 }}>
                   <StructureViewer smiles={c.smiles} height={124} />
@@ -189,6 +198,8 @@ export default function ComparisonSheet({ compounds, onRemove, onClear }) {
           MW·logP·TPSA·HBD/HBA·회전결합 기준
         </span>
       </div>
+
+      {detail && <CompoundDetailModal compound={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
